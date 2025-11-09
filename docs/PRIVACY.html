@@ -3,9 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Privacy Policy for the twitter-automation Chrome extension (WittyWing). Explains what data is used, how it is stored, and how to remove it." />
   <title>Privacy Policy — twitter-automation</title>
   <style>
-    :root{--bg:#f7fafc;--card:#ffffff;--muted:#6b7280;--accent:#0ea5a4;--max:900px}
+    :root{--bg:#f7fafc;--card:#ffffff;--muted:#556574;--accent:#0ea5a4;--max:900px}
     body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;line-height:1.6;background:var(--bg);color:#0f172a;margin:0;padding:32px}
     .wrap{max-width:var(--max);margin:0 auto}
     header{display:flex;align-items:center;gap:16px;margin-bottom:18px}
@@ -32,7 +33,7 @@
       <div class="logo">W</div>
       <div>
         <h1>twitter-automation — Privacy Policy</h1>
-        <div class="meta">Last updated: 2025-11-04 · This page explains how the extension collects, uses and protects user data</div>
+        <div class="meta">Last updated: 2025-11-09 · This page explains how the extension collects, uses and protects user data</div>
       </div>
     </header>
 
@@ -49,6 +50,11 @@
       <section id="data-we-collect">
         <h2>1. Data we collect</h2>
         <p class="muted">The extension is intentionally minimal: it only stores a Google Gemini API key (provided by you) and temporarily reads tweet text from the page when you request a generated reply.</p>
+        <p>We explicitly declare the following data types used by the extension:</p>
+        <ul>
+          <li><strong>Website content:</strong> Tweet text from the page. Sent to Google Gemini only when you click <em>Generate</em>.</li>
+          <li><strong>Authentication information:</strong> Your Google Gemini API key stored locally in <code>chrome.storage.local</code> to authenticate requests to the Gemini API.</li>
+        </ul>
         <p><strong>Gemini API key:</strong> The extension stores your Google Gemini API key locally in the browser extension storage (<code>chrome.storage.local</code>). This key is used only to call Google Gemini APIs and is not transmitted to any developer-controlled server.</p>
         <p><strong>Tweet text:</strong> When you click the Generate button, the visible tweet text (and any optional tone selection) is sent to Google Gemini as part of the prompt to generate a suggested reply. Tweet text is transmitted only on explicit user action and is not collected continuously.</p>
       </section>
@@ -66,17 +72,25 @@
 
       <section id="security">
         <h2>4. Security</h2>
-        <p>The Gemini API key is stored locally in <code>chrome.storage.local</code>. Only the extension code can access this storage. Do not share your API key with untrusted parties. We recommend using a dedicated API key with minimal permissions and monitoring your Google Cloud usage and quotas.</p>
+  <p>The Gemini API key is stored locally in <code>chrome.storage.local</code>. Only the extension code can access this storage. Do not share your API key with untrusted parties. We recommend using a dedicated API key with minimal permissions and monitoring your Google Cloud usage and quotas.</p>
+  <p class="muted">All network requests to Google Gemini are made over HTTPS. API calls use a 30-second timeout to prevent long-running requests. The extension does not fetch or execute remote JavaScript or WebAssembly at runtime.</p>
       </section>
 
       <section id="removal">
         <h2>5. Removing your data</h2>
         <p>To remove your API key, open the extension popup and delete the key or uninstall the extension. You can also clear extension data from Chrome's settings. Uninstalling the extension removes local extension storage.</p>
+        <p><strong>Exact steps to delete the stored key:</strong></p>
+        <ol>
+          <li>Click the extension icon in Chrome to open the popup.</li>
+          <li>In the popup, clear the API key input field and click the Save/Remove button (or click the provided delete action).</li>
+          <li>Alternatively, go to chrome://extensions → Details → Site storage and clear data for this extension.</li>
+        </ol>
       </section>
 
       <section id="contact">
         <h2>6. Contact</h2>
         <p>If you have questions or issues, please open an issue in the project repository or contact the developer via the repository page.</p>
+        <p class="muted">Preferred contact: open an issue at <a href="https://github.com/ahmadparizaad/twitter-automation/issues" target="_blank" rel="noopener">https://github.com/ahmadparizaad/twitter-automation/issues</a></p>
       </section>
 
       <section id="changes">
