@@ -102,3 +102,5 @@ This project includes a Privacy Policy describing how the extension handles your
 Add this URL to your Chrome Web Store listing under "Privacy Policy" when publishing the extension.
 
 If you prefer a custom domain, update the Pages settings accordingly and replace the URL above with your custom domain.
+
+> Quick link: View the hosted Privacy Policy — https://ahmadparizaad.github.io/twitter-automation/PRIVACY.html
