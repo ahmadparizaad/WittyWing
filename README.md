@@ -86,3 +86,19 @@ Developed by Ahmad and contributors. Powered by Google Gemini.
 ## Feedback & Contributions
 
 Feel free to open issues or submit pull requests for improvements!
+
+---
+
+## Privacy Policy (GitHub Pages)
+
+This project includes a Privacy Policy describing how the extension handles your Gemini API key and tweet text. To host the policy as a static page using GitHub Pages:
+
+1. Go to your repository settings on GitHub.
+2. Under "Pages", choose the `docs/` folder as the source and save.
+3. After GitHub builds the site, the Privacy Policy will be available at:
+
+   https://ahmadparizaad.github.io/twitter-automation/PRIVACY.html
+
+Add this URL to your Chrome Web Store listing under "Privacy Policy" when publishing the extension.
+
+If you prefer a custom domain, update the Pages settings accordingly and replace the URL above with your custom domain.

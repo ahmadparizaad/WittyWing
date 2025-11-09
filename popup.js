@@ -1,16 +1,42 @@
 // popup.js
-document.addEventListener('DOMContentLoaded', () => {
+
+// Promise wrapper for chrome.runtime.sendMessage
+function sendMessageAsync(message) {
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage(message, (resp) => resolve(resp));
+    } catch (e) {
+      console.error('sendMessageAsync error:', e);
+      resolve({ error: e.message });
+    }
+  });
+}
+
+// Helper to read stored Gemini API key using Promise
+function getStoredKey() {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.get(['geminiApiKey'], (result) => resolve(result && result.geminiApiKey));
+    } catch (e) {
+      console.error('getStoredKey error:', e);
+      resolve(undefined);
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
   const apiKeyInput = document.getElementById('api-key');
   const startAutomationButton = document.getElementById('start-automation');
   const testApiKeyButton = document.getElementById('test-api-key');
   const statusMessage = document.getElementById('status-message');
 
   // Load saved API key
-  chrome.storage.local.get(['geminiApiKey'], (result) => {
-    if (result.geminiApiKey) {
-      apiKeyInput.value = result.geminiApiKey;
-    }
-  });
+  try {
+    const savedKey = await getStoredKey();
+    if (savedKey) apiKeyInput.value = savedKey;
+  } catch (e) {
+    console.error('Error loading stored API key:', e);
+  }
 
   // Function to validate API key format
   function isValidGeminiApiKey(apiKey) {
@@ -101,11 +127,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Save API key
-    chrome.storage.local.set({ geminiApiKey }, () => {
+    chrome.storage.local.set({ geminiApiKey }, async () => {
       statusMessage.textContent = 'Gemini API Key saved. Starting automation...';
       statusMessage.style.color = 'green';
       // Send message to background script to start automation
-      chrome.runtime.sendMessage({ action: 'startAutomation' });
+      try {
+        await sendMessageAsync({ action: 'startAutomation' });
+      } catch (e) {
+        console.error('Error starting automation:', e);
+      }
     });
   });
 }); 

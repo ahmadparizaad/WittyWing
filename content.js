@@ -9,12 +9,41 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
   // Health check function to test extension context
   async function isExtensionContextValid() {
     try {
-      await chrome.runtime.sendMessage({ action: 'ping' });
-      return true;
+      const resp = await sendMessageAsync({ action: 'ping' });
+      return !!(resp && resp.success);
     } catch (error) {
       console.warn('Extension context not available:', error);
       return false;
     }
+  }
+
+  // Promise-based wrapper for chrome.runtime.sendMessage
+  function sendMessageAsync(message) {
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage(message, (response) => {
+          // In MV3, the callback may be invoked with undefined on error
+          resolve(response);
+        });
+      } catch (e) {
+        console.error('sendMessageAsync error:', e);
+        resolve({ error: e.message });
+      }
+    });
+  }
+
+  // Helper to read stored Gemini API key using Promise
+  function getStoredKey() {
+    return new Promise((resolve) => {
+      try {
+        chrome.storage.local.get(['geminiApiKey'], (result) => {
+          resolve(result && result.geminiApiKey);
+        });
+      } catch (e) {
+        console.error('getStoredKey error:', e);
+        resolve(undefined);
+      }
+    });
   }
 
   // Periodic health check to detect context invalidation
@@ -264,8 +293,7 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
               console.log('Requesting reply for tweet:', tweetText);
               
               // Retrieve API key from storage before sending the message
-              const storedGeminiApiKey = await chrome.storage.local.get(['geminiApiKey']);
-              const geminiApiKeyToSend = storedGeminiApiKey.geminiApiKey;
+              const geminiApiKeyToSend = await getStoredKey();
               
               if (!geminiApiKeyToSend) {
                 alert('Gemini API Key not found in extension storage. Please set it via the extension popup.');
@@ -274,7 +302,7 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
               }
 
               try {
-                const replyResponse = await chrome.runtime.sendMessage({ action: 'getReply', tweetText: tweetText, geminiApiKey: geminiApiKeyToSend, tone: selectedTone });
+                const replyResponse = await sendMessageAsync({ action: 'getReply', tweetText: tweetText, geminiApiKey: geminiApiKeyToSend, tone: selectedTone });
                 if (replyResponse && replyResponse.reply) {
                   console.log('Generated reply received:', replyResponse.reply);
 
