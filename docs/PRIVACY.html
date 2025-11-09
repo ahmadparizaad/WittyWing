@@ -9,8 +9,9 @@
     :root{--bg:#f7fafc;--card:#ffffff;--muted:#556574;--accent:#0ea5a4;--max:900px}
     body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;line-height:1.6;background:var(--bg);color:#0f172a;margin:0;padding:32px}
     .wrap{max-width:var(--max);margin:0 auto}
-    header{display:flex;align-items:center;gap:16px;margin-bottom:18px}
-    .logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,#06b6d4,#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+  header{display:flex;align-items:right;flex-direction:column;margin-bottom:18px}
+    .logo{border-radius:10px;box-shadow:0 6px 18px rgba(2,6,23,0.06);border:1px solid rgb(0, 1, 5);width:56px;height:48px;object-fit:contain; margin-right:5px;}
+  .header-text{display:flex;flex-direction:row}
     h1{margin:0;font-size:28px}
     .meta{color:var(--muted);font-size:13px;margin-top:6px}
     .card{background:var(--card);border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.06);padding:28px;margin-top:18px}
@@ -30,11 +31,14 @@
 <body>
   <div class="wrap">
     <header>
-      <div class="logo">W</div>
-      <div>
-        <h1>twitter-automation — Privacy Policy</h1>
-        <div class="meta">Last updated: 2025-11-09 · This page explains how the extension collects, uses and protects user data</div>
-      </div>
+      
+      <div class="header-text">
+        <img class="logo" src="../icons/icon128.png" alt="WittyWing Logo" width="56" height="56">
+        <h1>WittyWing</h1>
+        </div>
+        <h2 style="margin:6px 0 0 0;font-size:18px;font-weight:600;color:var(--muted);">Privacy Policy</h2>
+        <div class="meta">Last updated: 2025-11-09<br/>This page explains how the extension collects, uses and protects user data</div>
+      
     </header>
 
     <div class="card" role="article">
