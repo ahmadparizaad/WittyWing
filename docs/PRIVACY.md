@@ -1,10 +1,10 @@
 <div style="text-align: justify; max-width: 900px; margin: 0 auto; line-height: 1.6;">
 
-## Privacy Policy — Twitter Automation LLM
+## Privacy Policy — WittyWing
 
 **Last updated:** 2025-11-04
 
-This Privacy Policy explains how the Twitter Automation LLM Chrome extension ("the Extension") collects, uses, and protects user data.
+This Privacy Policy explains how the WittyWing Chrome extension ("the Extension") collects, uses, and protects user data.
 
 ### 1. Data we collect
 

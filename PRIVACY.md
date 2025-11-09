@@ -1,8 +1,8 @@
-Privacy Policy — Twitter Automation LLM
+Privacy Policy — WittyWing
 
 Last updated: 2025-11-04
 
-This Privacy Policy describes how the Twitter Automation LLM Chrome extension ("the Extension") handles data.
+This Privacy Policy describes how the WittyWing Chrome extension ("the Extension") handles data.
 
 1. Data we collect
 - Gemini API Key: The Extension stores your Google Gemini API key locally in your browser's extension storage (`chrome.storage.local`). This key is used only to call Google Gemini APIs from the background/service worker. The extension does not transmit the API key to any third-party servers other than Google Gemini endpoints.

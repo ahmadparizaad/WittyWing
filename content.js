@@ -2,7 +2,7 @@
 
 // Idempotency check: Ensure the content script only runs once per page load
 if (window.hasTwitterAutomationLLMContentScriptRun) {
-  console.log("Twitter Automation LLM content script already loaded. Skipping re-initialization.");
+  console.log("WittyWing content script already loaded. Skipping re-initialization.");
 } else {
   window.hasTwitterAutomationLLMContentScriptRun = true;
 

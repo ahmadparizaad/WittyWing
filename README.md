@@ -1,4 +1,4 @@
-# Twitter Automation LLM Chrome Extension
+# WittyWing Chrome Extension
 
 Automate your Twitter (X) replies with AI-powered, tone-customized responses using Google Gemini. This extension streamlines your engagement, letting you reply to tweets with a single click and a personalized touch.
 
