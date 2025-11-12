@@ -1,13 +1,12 @@
 {
   "manifest_version": 3,
   "name": "WittyWing",
-  "version": "1.1",
+  "version": "1.2",
   "description": "A wingman for witty replies. Automates replying to tweets on x.com using Gemini AI with improved reliability.",
   "permissions": [
     "activeTab",
     "scripting",
     "storage",
-    "tabs",
     "clipboardWrite"
   ],
   "host_permissions": [
