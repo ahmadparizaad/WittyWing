@@ -121,7 +121,7 @@ router.post('/', async (req, res) => {
           },
           {
             name: 'gemini-3-flash',
-            endpoint: 'gemini-3-flash:generateContent',
+            endpoint: 'gemini-3-flash-preview:generateContent',
             rpm: 5,
             rpd: 20,
             counters: { rpm: 0, rpd: 0, lastRpmReset: Date.now(), lastRpdReset: Date.now() },
@@ -244,10 +244,10 @@ router.post('/', async (req, res) => {
         const model = orPool.models[idx];
         if (!model.disabledUntil || model.disabledUntil <= now) {
           orPool.index = idx; // Update last used index
-          return model.name;
+          return model;
         }
       }
-      return orPool.models[0].name; // Absolute fallback
+      return orPool.models[0]; // Absolute fallback
     }
 
     async function callGeminiModelPool(p) {
