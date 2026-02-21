@@ -32,19 +32,7 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
     });
   }
 
-  // Helper to read stored Gemini API key using Promise
-  function getStoredKey() {
-    return new Promise((resolve) => {
-      try {
-        chrome.storage.local.get(['geminiApiKey'], (result) => {
-          resolve(result && result.geminiApiKey);
-        });
-      } catch (e) {
-        console.error('getStoredKey error:', e);
-        resolve(undefined);
-      }
-    });
-  }
+  // BYOK removed: the extension uses server-side managed Gemini keys, no local key storage is required.
 
   // Periodic health check to detect context invalidation
   let healthCheckInterval = setInterval(async () => {
@@ -59,24 +47,32 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
   // Add debouncing and safety variables for injection
   let injectionInProgress = false;
   let injectionTimeout = null;
+  let injectionRetryCount = 0;
+  const maxInjectionRetries = 5;
+  let lastClickedTweetElement = null; // track last clicked tweet for fallback extraction
 
-  // Helper function to wait for an element to appear in the DOM
-  function waitForElement(selector, timeout = 5000, condition = (el) => true) {
+  // Helper function to wait for an element to appear in the DOM. Accepts single selector or an array of selectors.
+  function waitForElement(selectorOrSelectors, timeout = 5000, condition = (el) => true) {
+    const selectors = Array.isArray(selectorOrSelectors) ? selectorOrSelectors : [selectorOrSelectors];
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
       const interval = setInterval(() => {
-        const element = document.querySelector(selector);
-        if (element) {
-          if (condition(element)) {
+        let found = null;
+        for (const s of selectors) {
+          const el = document.querySelector(s);
+          if (el) { found = el; break; }
+        }
+        if (found) {
+          if (condition(found)) {
             clearInterval(interval);
-            resolve(element);
+            resolve(found);
           } else {
             // Log current state if condition is not met (e.g., button disabled)
-            console.log(`Element found, but condition not met for ${selector}. Current state: disabled=${element.disabled}, aria-disabled=${element.getAttribute('aria-disabled')}`);
+            console.log(`Element found, but condition not met for ${selectors.join('|')}. Current state: disabled=${found.disabled}, aria-disabled=${found.getAttribute('aria-disabled')}`);
           }
         } else if (Date.now() - startTime > timeout) {
           clearInterval(interval);
-          reject(new Error(`Element with selector "${selector}" not found or condition not met within ${timeout}ms`));
+          reject(new Error(`Element with selector "${selectors.join('|')}" not found or condition not met within ${timeout}ms`));
         }
       }, 200); // Check every 200ms
     });
@@ -142,8 +138,27 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
           return;
         }
 
-        // Wait for the reply modal to appear first, as we need it for overall layout adjustments
-        const replyModal = await waitForElement('[role="dialog"]', 10000);
+        // Try robust detection for reply textarea/dialog before assuming dialog role is present
+        // The Twitter/X UI changes frequently; prefer targeting the reply textarea and tweet button directly.
+        const replyTextAreaSelectorCandidates = [
+          '[data-testid="tweetTextarea_0"]',
+          'textarea[data-testid="tweetTextarea_0"]',
+          'div[aria-label="Tweet text"]',
+          'div[data-testid="tweetText"]',
+          'textarea[aria-label="Tweet text"]',
+        ];
+        const replyModalSelectorCandidates = ['[role="dialog"]', 'div[aria-modal="true"]', 'div[data-testid="sheetDialog"]'];
+
+        // Wait for either the reply textarea or a dialog to appear
+        const replyTextArea = await waitForElement(replyTextAreaSelectorCandidates, 15000).catch(() => null);
+        const replyModal = replyTextArea ? replyTextArea.closest('[role="dialog"]') : null;
+        // If replyModal still not found, try waiting for the dialog explicitly as fallback
+        const dialog = replyModal || (await waitForElement(replyModalSelectorCandidates, 10000).catch(() => null));
+        if (!dialog) {
+          // No dialog found; throw and let the caller handle
+          throw new Error('Reply dialog not found via reply textarea or fallback dialog selectors');
+        }
+        console.log('Reply modal/dialog found for layout adjustments.', dialog);
         console.log('Reply modal found for layout adjustments.', replyModal);
 
         // Enhanced check for already processed modal
@@ -160,9 +175,13 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
         replyModal.style.flexDirection = 'column';
         replyModal.style.justifyContent = 'space-between'; // Distribute space between content and controls
 
-        // Wait for the reply text area to appear, indicating the reply dialog is open
-        const replyTextArea = await waitForElement('[data-testid="tweetTextarea_0"]', 10000);
-        console.log('Reply text area found for button injection.', replyTextArea);
+        // If we didn't discover the replyTextArea earlier, try to find it now (shorter timeout)
+        const replyTextAreaFinal = replyTextArea || (await waitForElement(replyTextAreaSelectorCandidates, 3000).catch(() => null));
+        if (!replyTextAreaFinal) {
+          console.warn('Reply text area could not be found after dialog detection. Injection may not work reliably.');
+        } else {
+          console.log('Reply text area found for button injection.', replyTextAreaFinal);
+        }
 
         // Find the main content wrapper (the part above the action bar) and make it grow
         // This is important to push the action bar and tone buttons to the bottom
@@ -173,8 +192,13 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
           console.warn('Could not find main content wrapper within replyModal. Dialog expansion might be limited.');
         }
 
-        // Find the send button, which is usually a stable element near where we want to inject.
-        const sendButton = await waitForElement('[data-testid="tweetButton"]', 10000, (el) => true);
+        // Find the send button (tweetButton) within the dialog or the page
+        const sendButtonSelectorCandidates = ['[data-testid="tweetButton"]', 'div[data-testid="tweetButtonInline"]', 'div[role="button"][data-testid*="tweet"]'];
+        const sendButton = await waitForElement(sendButtonSelectorCandidates, 10000).catch(() => null);
+        if (!sendButton) {
+          console.error('Send button (tweetButton) not found — cannot inject the Generate Reply button.');
+          return;
+        }
         console.log('Send button found for injection placement.', sendButton);
 
         // Define available tones
@@ -263,46 +287,83 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
           generateButton.textContent = 'Generating...';
 
           try {
-            let tweetText = null;
-            // Attempt to find the main reply modal.
-            const replyModal = await waitForElement('[role="dialog"]', 5000);
-            console.log('Reply modal found for text extraction:', replyModal);
+              let tweetText = null;
+              // Attempt to find the main reply modal or textarea.
+              const replyModal = (await waitForElement(['[role="dialog"]', 'div[aria-modal="true"]', 'div[data-testid="sheetDialog"]'], 5000).catch(() => null));
+              console.log('Reply modal/dialog found for text extraction:', replyModal);
 
-            if (replyModal) {
-              // Get all tweetText elements within the modal.
-              const allTweetTextElementsInModal = replyModal.querySelectorAll('[data-testid="tweetText"]');
-              console.log('All [data-testid="tweetText"] elements in modal:', allTweetTextElementsInModal);
+              // Helper to extract text from an element, making sure we ignore the reply textbox
+              function extractTextFromElement(el) {
+                if (!el) return null;
+                const raw = el.innerText || '';
+                const s = raw.trim();
+                if (!s || s.length < 2) return null;
+                // Remove common reply headers like 'Replying to @user'
+                const cleaned = s.split('\n').filter(line => !/Replying to/i.test(line)).join(' ');
+                return cleaned.trim() || null;
+              }
 
-              // Iterate to find the original tweet's text, excluding the reply input area.
-              for (const element of allTweetTextElementsInModal) {
-                if (element.id !== replyTextArea.id && element.innerText.trim().length > 0) {
-                  tweetText = element.innerText;
-                  console.log('Extracted original tweet text:', tweetText);
-                  break;
+              // Try multiple strategies to robustly locate the original tweet text
+              // 1) Look inside replyModal for article or tweet text elements
+              if (replyModal) {
+                // Check for article with tweetText
+                const candidateSelectors = ['article[role="article"] [data-testid="tweetText"]', '[data-testid="tweetText"]', 'div[lang]'];
+                for (const sel of candidateSelectors) {
+                  const els = replyModal.querySelectorAll(sel);
+                  for (const el of els) {
+                    // ignore if it's the reply box / reply textarea
+                    const isReplyBox = !!el.closest && (el.closest('[role="textbox"]') || el.closest('textarea'));
+                    if (isReplyBox) continue;
+                    const txt = extractTextFromElement(el);
+                    if (txt) {
+                      tweetText = txt;
+                      console.log('Extracted tweet text from modal using selector', sel, ':', tweetText);
+                      break;
+                    }
+                  }
+                  if (tweetText) break;
                 }
               }
 
-              if (!tweetText) {
-                console.error('Could not find original tweet text within the modal after checking all elements.');
+              // 2) Fall back to the last clicked tweet element (captured from reply click)
+              if (!tweetText && lastClickedTweetElement) {
+                const el = lastClickedTweetElement.querySelector('[data-testid="tweetText"]') || lastClickedTweetElement.querySelector('div[lang]') || lastClickedTweetElement.querySelector('article[role="article"]');
+                const txt = extractTextFromElement(el);
+                if (txt) {
+                  tweetText = txt;
+                  console.log('Extracted tweet text from lastClickedTweetElement:', tweetText);
+                }
               }
-            } else {
-              console.error('Could not find the reply modal ([role="dialog"]).');
-            }
+
+              // 3) Global fallback: find nearest [data-testid="tweetText"] on the page (first non-empty)
+              if (!tweetText) {
+                const allGlobals = document.querySelectorAll('[data-testid="tweetText"], div[lang]');
+                for (const el of allGlobals) {
+                  const txt = extractTextFromElement(el);
+                  if (txt) {
+                    tweetText = txt;
+                    console.log('Global fallback: extracted tweet text:', tweetText);
+                    break;
+                  }
+                }
+              }
 
             if (tweetText) {
               console.log('Requesting reply for tweet:', tweetText);
               
-              // Retrieve API key from storage before sending the message
-              const geminiApiKeyToSend = await getStoredKey();
-              
-              if (!geminiApiKeyToSend) {
-                alert('Gemini API Key not found in extension storage. Please set it via the extension popup.');
-                console.error('Gemini API Key not found in storage.');
-                return; 
-              }
-
+              // The extension will call the server for AI generation which manages API keys.
+              // Check for server JWT if available to provide personalized profile
+              const serverJwt = await new Promise((resolve) => {
+                try {
+                  chrome.storage.local.get(['serverJwt'], (result) => resolve(result && result.serverJwt));
+                } catch (e) {
+                  console.error('serverJwt read error:', e);
+                  resolve(undefined);
+                }
+              });
               try {
-                const replyResponse = await sendMessageAsync({ action: 'getReply', tweetText: tweetText, geminiApiKey: geminiApiKeyToSend, tone: selectedTone });
+                const headersObj = {}; // serverJwt is passed through storage, background.js will include it if present
+                const replyResponse = await sendMessageAsync({ action: 'getReply', tweetText: tweetText, tone: selectedTone });
                 if (replyResponse && replyResponse.reply) {
                   console.log('Generated reply received:', replyResponse.reply);
 
@@ -315,15 +376,8 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
 
                 } else if (replyResponse && replyResponse.error) {
                   console.error('Error generating reply:', replyResponse.error);
-                  
-                  // Check if it's an API key related error
-                  if (replyResponse.error.includes('Invalid or expired API key') || 
-                      replyResponse.error.includes('401') || 
-                      replyResponse.error.includes('403')) {
-                    alert(`API Key Error: ${replyResponse.error}\n\nPlease update your Gemini API key in the extension popup and try again.`);
-                  } else {
-                    alert(`Error generating reply: ${replyResponse.error}`);
-                  }
+                  // Server-side error: show a generic notice to the user
+                  alert(`Error generating reply: ${replyResponse.error}`);
                 }
               } catch (error) {
                 console.error('Extension context error:', error);
@@ -387,6 +441,19 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
           console.error('Could not find the native Twitter action bar container.');
         }      } catch (error) {
         console.error('Error injecting Generate Reply button and tone selectors:', error);
+        // Retry a few times for transient races in the DOM building lifecycle
+        try {
+          if (injectionRetryCount < maxInjectionRetries && error && (error.message && (error.message.includes('not found') || error.message.includes('could not')))) {
+            injectionRetryCount++;
+            const retryDelay = 500 * injectionRetryCount; // backoff: 500ms, 1000ms, 1500ms
+            console.log(`Retrying injection in ${retryDelay}ms (attempt ${injectionRetryCount}/${maxInjectionRetries})...`);
+            setTimeout(() => injectGenerateReplyButton(), retryDelay);
+          } else {
+            injectionRetryCount = 0;
+          }
+        } catch (retryErr) {
+          console.warn('Retry scheduling failed', retryErr);
+        }
       } finally {
         injectionInProgress = false;
       }
@@ -442,10 +509,12 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
       if (mutation.addedNodes.length > 0) {
         for (const node of mutation.addedNodes) {
           // Check if the added node contains the reply text area or is the reply dialog itself
-          if (node.nodeType === 1 && 
-              (node.querySelector('[data-testid="tweetTextarea_0"]') || 
-               node.matches('[data-testid="tweetTextarea_0"]') ||
-               (node.matches('[role="dialog"]') && node.querySelector('[data-testid="tweetTextarea_0"]')))) {
+            if (node.nodeType === 1 && (
+              node.querySelector('[data-testid="tweetTextarea_0"]') ||
+              node.matches('[data-testid="tweetTextarea_0"]') ||
+              node.querySelector('[aria-label="Tweet text"]') ||
+              node.querySelector('[data-testid="tweetText"]') ||
+              node.matches('[role="dialog"]') && (node.querySelector('[data-testid="tweetTextarea_0"]') || node.querySelector('[aria-label="Tweet text"]')))) {
             
             // Additional check: ensure this isn't already processed
             const parentDialog = node.closest('[role="dialog"]') || (node.matches('[role="dialog"]') ? node : null);
@@ -467,4 +536,28 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
 
   // Start observing the body for changes
   observer.observe(document.body, { childList: true, subtree: true });
+
+  // As an additional reliability measure: detect user clicks on a "Reply" button
+  // and attempt to inject the Generate Reply button after a short delay. This is
+  // useful if the reply modal is created in response to a click rather than as a
+  // mutation we detect immediately.
+  document.addEventListener('click', (e) => {
+    try {
+      const replyBtn = e.target && (e.target.closest && (e.target.closest('[data-testid="reply"]') || e.target.closest('[aria-label="Reply"]')));
+      if (replyBtn) {
+        // Track the tweet element that was replied to, if available
+        try {
+          const clickedTweet = replyBtn.closest && (replyBtn.closest('[data-testid="tweet"]') || replyBtn.closest('article[role="article"]'));
+          if (clickedTweet) lastClickedTweetElement = clickedTweet;
+        } catch (err) {
+          // ignore
+        }
+        // delay slightly to allow reply modal to open and be fully constructed
+        setTimeout(() => injectGenerateReplyButton(), 300);
+      }
+    } catch (err) {
+      // don't let a listener error break the page
+      console.warn('Reply click detection handler error:', err);
+    }
+  }, true);
 }

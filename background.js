@@ -1,3 +1,6 @@
+import { axios } from './libs/axios-esm.js';
+import { SERVER_URL } from './src/config.ts';
+
 let automationRunning = false;
 let repliedTweetIds = new Set();
 
@@ -32,43 +35,68 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'ping') {
     sendResponse({ success: true, timestamp: Date.now() });
     return true;
-  } else if (request.action === 'startAutomation') {
-    if (!automationRunning) {
-      automationRunning = true;
-      console.log('Automation started.');
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs[0]) {
-          startContentScriptAutomation(tabs[0].id);
-        } else {
-          console.error('No active tab found.');
-          automationRunning = false;
-        }
-      });
-    }
-    sendResponse({ success: true });
   } else if (request.action === 'getReply') {
-    // Retrieve geminiApiKey and tone directly from the request object
-    const currentGeminiApiKey = request.geminiApiKey;
     const selectedTone = request.tone || 'Default'; // Default to 'Default' if no tone is provided
-
-    if (!currentGeminiApiKey) {
-      console.error('Gemini API Key missing in getReply request.');
-      sendResponse({ error: 'Gemini API Key missing.' });
-      return true;
-    }
-    
-    // Use async function and handle promises properly
     (async () => {
       try {
-        const reply = await generateReply(request.tweetText, request.tweetId, currentGeminiApiKey, selectedTone);
+        console.log('getReply called with tone:', selectedTone, 'tweetTextLength:', request.tweetText && request.tweetText.length);
+        // Always call the server generate endpoint first (server-side key pool manages limits)
+        let reply = null;
+        try {
+          const { serverJwt } = await new Promise((resolve) => chrome.storage.local.get(['serverJwt'], resolve));
+          console.log('serverJwt present:', !!serverJwt);
+          const headers = {};
+          if (serverJwt) headers['Authorization'] = `Bearer ${serverJwt}`;
+          console.log('Calling server generate endpoint:', `${SERVER_URL}/api/generate`);
+          const genResp = await axios.post(`${SERVER_URL}/api/generate`, { tweet_text: request.tweetText, tone: selectedTone }, { headers, withCredentials: true });
+          console.log('Server generate status:', genResp && genResp.status);
+          console.log('Server generate response data:', genResp && genResp.data);
+          if (genResp && genResp.status >= 200 && genResp.status < 300) {
+            reply = genResp.data && genResp.data.reply;
+          } else {
+            console.warn('Server generate failed with status', genResp && genResp.status);
+          }
+        } catch (err) {
+          console.warn('Server generate failed, error:', err && (err.message || err.toString()));
+          console.warn('Full error object:', err);
+        }
+
+        // Fallback deterministic reply (simple templates) if server failed
+        if (!reply) {
+          const toneKey = selectedTone || 'Default';
+          switch (toneKey) {
+            case 'Funny':
+              reply = `😂 That got me laughing — love it!`;
+              break;
+            case 'Sarcastic':
+              reply = `Right, because that's not suspicious at all.`;
+              break;
+            case 'Sincere':
+              reply = `This is lovely — thank you for sharing.`;
+              break;
+            case 'One-liner':
+              reply = `Well played.`;
+              break;
+            case 'Asking':
+              reply = `How did you even come up with this?`;
+              break;
+            case 'Friendly':
+              reply = `Love it — hope you're doing awesome! 😊`;
+              break;
+            case 'Thanking':
+              reply = `Thanks — really appreciate it!`;
+              break;
+            default:
+              reply = `Nice! Thanks for sharing.`;
+          }
+        }
         sendResponse({ reply: reply, tweetId: request.tweetId });
       } catch (error) {
         console.error('Error generating reply:', error);
         sendResponse({ error: error.message, tweetId: request.tweetId });
       }
     })();
-    
-    return true; // Will respond asynchronously
+    return true;
   } else if (request.action === 'markTweetAsReplied') {
     repliedTweetIds.add(request.tweetId);
     sendResponse({ success: true });
@@ -81,86 +109,4 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   sendResponse({ error: 'Unknown action' });
 });
 
-async function startContentScriptAutomation(tabId) {
-  chrome.scripting.executeScript({
-    target: { tabId: tabId },
-    files: ['content.js']
-  }, () => {
-    if (chrome.runtime.lastError) {
-      console.error(`Script injection failed: ${chrome.runtime.lastError.message}`);
-    } else {
-      chrome.tabs.sendMessage(tabId, { action: 'startProcessing' });
-    }
-  });
-}
-
-async function generateReply(tweetText, tweetId, apiKey, tone) {
-  const instruction = tonePromptMap[tone] || tonePromptMap["Default"];
-  const prompt = `${instruction}\n\nHere is the tweet you're replying to:\n"${tweetText}"`;
-  
-  try {
-    console.log('Using Gemini API Key:', apiKey ? '[Key Present]' : '[Key Missing]', 'with tone:', tone);
-    
-    // Add timeout to prevent hanging requests
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-    
-    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent', {
-      method: 'POST',
-      headers: {
-        'X-goog-api-key': `${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        'contents': [
-          {
-            'parts': [
-              {
-                'text': prompt
-              }
-            ]
-          }
-        ]
-      }),
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      let errorData;
-      try {
-        errorData = await response.json();
-      } catch (e) {
-        errorData = { error: 'Unknown error response' };
-      }
-      
-      // Check for API key related errors
-      if (response.status === 401 || response.status === 403) {
-        throw new Error('Invalid or expired API key. Please check your Gemini API key in the extension popup.');
-      }
-      
-      if (response.status === 429) {
-        throw new Error('API rate limit exceeded. Please wait a moment and try again.');
-      }
-      
-      throw new Error(`API error: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
-    }
-
-    const data = await response.json();
-    
-    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
-      throw new Error('Invalid response format from Gemini API');
-    }
-    
-    return data.candidates[0].content.parts[0].text;
-  } catch (error) {
-    console.error('Gemini API call failed:', error);
-    
-    if (error.name === 'AbortError') {
-      throw new Error('Request timed out. Please try again.');
-    }
-    
-    throw error;
-  }
-} 
+// generateReply removed: server-side generation is used instead (server manages API keys/rate-limits)
