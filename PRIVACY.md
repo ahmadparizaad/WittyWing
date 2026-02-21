@@ -5,11 +5,11 @@ Last updated: 2025-11-04
 This Privacy Policy describes how the WittyWing Chrome extension ("the Extension") handles data.
 
 1. Data we collect
-- Gemini API Key: The Extension stores your Google Gemini API key locally in your browser's extension storage (`chrome.storage.local`). This key is used only to call Google Gemini APIs from the background/service worker. The extension does not transmit the API key to any third-party servers other than Google Gemini endpoints.
+- Gemini API Key: The Extension no longer requires or stores a Gemini API key locally. The server manages a pool of Gemini API keys and performs calls on behalf of users. The extension does not send any local API key to third parties.
 - Local runtime data: The Extension may temporarily read text from tweets displayed in your browser (to generate replies). This text is sent to the Google Gemini API as part of the prompt and is not stored persistently by the Extension.
 
 2. How we use your data
-- The Gemini API key is used to authenticate requests to the Google Gemini API to generate reply text. It is stored locally so you don't need to re-enter it each session.
+- The server manages Gemini API keys and performs authenticated requests to the Google Gemini API when the extension requests generation. The extension does not store or transmit your personal API key.
 - Tweet text is sent to Google Gemini to produce a reply. The Extension does not retain tweet content after generating the reply (except as required for UI display). The generated reply is copied to your clipboard; it is up to you whether you post it.
 
 3. Data sharing
@@ -20,7 +20,7 @@ This Privacy Policy describes how the WittyWing Chrome extension ("the Extension
 - We recommend using a dedicated API key with appropriate permissions and monitoring your Google Cloud usage and quotas.
 
 5. Deleting your data
-- To remove your API key, open the Extension popup and delete the key, or uninstall the Extension. You can also clear extension storage via Chrome's settings.
+- The extension does not store a Gemini API key locally. To remove your profile or session data stored server-side, sign out via the popup or contact the server operator.
 
 6. Contact
 - For questions or issues, open an issue in the project's repository or contact the developer.
