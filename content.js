@@ -303,6 +303,22 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
                 return cleaned.trim() || null;
               }
 
+              // Helper to extract image URLs from a tweet element
+              function extractImagesFromElement(el) {
+                if (!el) return [];
+                const images = [];
+                // Look for images in the tweet context (exclude user profile pics)
+                const imgElements = el.querySelectorAll('img[src*="pbs.twimg.com/media"]');
+                imgElements.forEach(img => {
+                  if (img.src && !images.includes(img.src)) {
+                    images.push(img.src);
+                  }
+                });
+                return images;
+              }
+
+              let tweetImages = [];
+
               // Try multiple strategies to robustly locate the original tweet text
               // 1) Look inside replyModal for article or tweet text elements
               if (replyModal) {
@@ -318,6 +334,14 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
                     if (txt) {
                       tweetText = txt;
                       console.log('Extracted tweet text from modal using selector', sel, ':', tweetText);
+                      
+                      // Also extract images from the closest article or the modal itself
+                      const parentArticle = el.closest('article');
+                      if (parentArticle) {
+                        tweetImages = extractImagesFromElement(parentArticle);
+                      } else {
+                        tweetImages = extractImagesFromElement(replyModal);
+                      }
                       break;
                     }
                   }
@@ -331,6 +355,7 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
                 const txt = extractTextFromElement(el);
                 if (txt) {
                   tweetText = txt;
+                  tweetImages = extractImagesFromElement(lastClickedTweetElement);
                   console.log('Extracted tweet text from lastClickedTweetElement:', tweetText);
                 }
               }
@@ -342,6 +367,10 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
                   const txt = extractTextFromElement(el);
                   if (txt) {
                     tweetText = txt;
+                    const parentArticle = el.closest('article');
+                    if (parentArticle) {
+                      tweetImages = extractImagesFromElement(parentArticle);
+                    }
                     console.log('Global fallback: extracted tweet text:', tweetText);
                     break;
                   }
@@ -349,7 +378,7 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
               }
 
             if (tweetText) {
-              console.log('Requesting reply for tweet:', tweetText);
+              console.log('Requesting reply for tweet:', tweetText, 'with images:', tweetImages);
               
               // The extension will call the server for AI generation which manages API keys.
               // Check for server JWT if available to provide personalized profile
@@ -363,7 +392,7 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
               });
               try {
                 const headersObj = {}; // serverJwt is passed through storage, background.js will include it if present
-                const replyResponse = await sendMessageAsync({ action: 'getReply', tweetText: tweetText, tone: selectedTone });
+                const replyResponse = await sendMessageAsync({ action: 'getReply', tweetText: tweetText, images: tweetImages, tone: selectedTone });
                 if (replyResponse && replyResponse.reply) {
                   console.log('Generated reply received:', replyResponse.reply);
 

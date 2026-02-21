@@ -49,7 +49,7 @@ function optionalAuth(req) {
   }
 }
 
-function makePrompt(user, tweet_text, tone) {
+function makePrompt(user, tweet_text, tone, images = []) {
   // Compose a richer profile summary that includes projects (if any)
   const namePart = user.displayName || user.email || 'Unknown';
   const rolePart = user.role || '';
@@ -74,14 +74,19 @@ function makePrompt(user, tweet_text, tone) {
   const profileSummary = `${namePart}${rolePart ? ' - ' + rolePart : ''}${bioPart ? ' - ' + bioPart : ''}${projectPart ? ' - ' + projectPart : ''}`;
   const tonePrompt = tonePromptMap[tone] || tonePromptMap.Default;
 
-  const prompt = `System: You are an assistant that writes short, natural Twitter replies for a user. Use the user profile and tone to guide the style. Tone: ${tone} - ${tonePrompt}\nUSER: ${profileSummary}\nTweet: ${tweet_text}\n
+  let imageContext = '';
+  if (images && images.length > 0) {
+    imageContext = `\n[Images detected in tweet: ${images.length}] Please consider the visual content of the attached images when writing your reply.`;
+  }
+
+  const prompt = `System: You are an assistant that writes short, natural Twitter replies for a user. Use the user profile and tone to guide the style. Tone: ${tone} - ${tonePrompt}${imageContext}\nUSER: ${profileSummary}\nTweet: ${tweet_text}\n
 Reply with 1 suggested reply that's short and uses the specified tone.`;
   return prompt;
 }
 
 router.post('/', async (req, res) => {
   try {
-    const { tweet_text, tone } = req.body;
+    const { tweet_text, tone, images } = req.body;
     const toneKey = tone || 'Default';
     // Optional auth: try to populate req.user if a token is present, but do not require it
     optionalAuth(req);
@@ -99,7 +104,7 @@ router.post('/', async (req, res) => {
       user = { displayName: 'WittyWing User', role: '', short_bio: '' };
     }
 
-    const prompt = makePrompt(user, tweet_text, tone);
+    const prompt = makePrompt(user, tweet_text, tone, images);
     console.info('Generation prompt using profile summary:', prompt);
 
     // Setup key pool (backwards compatible: support single key via GEMINI_API_KEY)
@@ -250,7 +255,7 @@ router.post('/', async (req, res) => {
       return orPool.models[0]; // Absolute fallback
     }
 
-    async function callGeminiModelPool(p) {
+    async function callGeminiModelPool(p, images = []) {
       if (!apiKeys || apiKeys.length === 0) return { error: 'no-api-keys' };
 
       const maxModelAttempts = 3;
@@ -281,8 +286,11 @@ router.post('/', async (req, res) => {
           }
 
           try {
+            // Build multimodal request parts for Gemini (using simplified text context for now)
+            const parts = [{ text: p }];
+
             const resp = await axios.post(modelUrl, { 
-              contents: [{ parts: [{ text: p }] }],
+              contents: [{ parts: parts }],
               generationConfig: {
                 maxOutputTokens: 150,
                 temperature: 0.7
@@ -381,9 +389,22 @@ router.post('/', async (req, res) => {
       try {
         const combinedContent = structuredSystem ? `${structuredSystem}\n\nUser Request: ${promptInput}` : promptInput;
         
+        // Prepare multimodal messages for models that support vision
+        const messages = [];
+        if (options.images && options.images.length > 0) {
+            const content = [{ type: 'text', text: combinedContent }];
+            // Add up to 3 images to the message for OpenRouter
+            options.images.slice(0, 3).forEach(url => {
+                content.push({ type: 'image_url', image_url: { url } });
+            });
+            messages.push({ role: 'user', content });
+        } else {
+            messages.push({ role: 'user', content: combinedContent });
+        }
+
         const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
           model: modelName,
-          messages: [{ role: 'user', content: combinedContent }],
+          messages: messages,
           temperature: 0.7,
           max_tokens: 300
         }, {
@@ -491,7 +512,7 @@ router.post('/', async (req, res) => {
         // Try Gemini model pool first
         geminiAttempted = true;
         try {
-          const geminiResp = await callGeminiModelPool(prompt);
+          const geminiResp = await callGeminiModelPool(prompt, images);
           if (geminiResp && geminiResp.text) {
             await incrementUsage();
             return res.json({ reply: geminiResp.text, prompt, model: geminiResp.model });
@@ -510,7 +531,7 @@ router.post('/', async (req, res) => {
       // Use OpenRouter for remaining authenticated calls
       openRouterAttempted = true;
       try {
-        const orResp = await callOpenRouter(prompt, { structured: true, tone: toneKey });
+        const orResp = await callOpenRouter(prompt, { structured: true, tone: toneKey, images: images });
         if (orResp && orResp.text) {
           await incrementUsage();
           console.info(`Generation successful (Auth Tier) via OpenRouter [${orResp.model}]`);
@@ -524,7 +545,7 @@ router.post('/', async (req, res) => {
       // Anonymous users: default to OpenRouter
       openRouterAttempted = true;
       try {
-        const orResp = await callOpenRouter(prompt, { structured: true, tone: toneKey });
+        const orResp = await callOpenRouter(prompt, { structured: true, tone: toneKey, images: images });
         if (orResp && orResp.text) {
           await incrementUsage();
           console.info(`Generation successful (Anon Tier) via OpenRouter [${orResp.model}]`);
@@ -539,7 +560,7 @@ router.post('/', async (req, res) => {
       if (apiKeys.length > 0) {
         geminiAttempted = true;
         try {
-          const geminiResp = await callGeminiModelPool(prompt);
+          const geminiResp = await callGeminiModelPool(prompt, images);
           if (geminiResp && geminiResp.text) {
             await incrementUsage();
             return res.json({ reply: geminiResp.text, prompt, model: geminiResp.model });

@@ -39,7 +39,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const selectedTone = request.tone || 'Default'; // Default to 'Default' if no tone is provided
     (async () => {
       try {
-        console.log('getReply called with tone:', selectedTone, 'tweetTextLength:', request.tweetText && request.tweetText.length);
+        console.log('getReply called with tone:', selectedTone, 'tweetTextLength:', request.tweetText && request.tweetText.length, 'numImages:', request.images && request.images.length);
         // Always call the server generate endpoint first (server-side key pool manages limits)
         let reply = null;
         try {
@@ -48,7 +48,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           const headers = {};
           if (serverJwt) headers['Authorization'] = `Bearer ${serverJwt}`;
           console.log('Calling server generate endpoint:', `${SERVER_URL}/api/generate`);
-          const genResp = await axios.post(`${SERVER_URL}/api/generate`, { tweet_text: request.tweetText, tone: selectedTone }, { headers, withCredentials: true });
+          const genResp = await axios.post(`${SERVER_URL}/api/generate`, { tweet_text: request.tweetText, images: request.images, tone: selectedTone }, { headers, withCredentials: true });
           console.log('Server generate status:', genResp && genResp.status);
           console.log('Server generate response data:', genResp && genResp.data);
           if (genResp && genResp.status >= 200 && genResp.status < 300) {
