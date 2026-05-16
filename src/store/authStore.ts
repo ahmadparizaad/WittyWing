@@ -79,8 +79,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         } else {
           console.warn('Server OAuth not configured:', cfgResp?.data);
         }
-      } catch (err) {
-        console.error('Error checking server OAuth config:', err);
+      } catch (err: any) {
+        console.error('Error checking server OAuth config:', err?.response?.status, err?.response?.data || err?.message);
       }
     })();
 

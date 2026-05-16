@@ -9,7 +9,7 @@ function requireAuth(req, res, next) {
   if (auth && auth.startsWith('Bearer ')) {
     const token = auth.slice('Bearer '.length);
     try {
-      const payload = jwt.verify(token, process.env.SESSION_SECRET || 'change-me');
+      const payload = jwt.verify(token, process.env.SESSION_SECRET);
       if (payload.type !== 'access') throw new Error('Invalid token type');
       req.user = { _id: payload.id, displayName: payload.displayName, email: payload.email };
       return next();

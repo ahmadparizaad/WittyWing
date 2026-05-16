@@ -53,7 +53,7 @@ const jwt = require('jsonwebtoken');
 if (isGoogleOAuthConfigured) {
   router.get('/google/callback', passport.authenticate('google', { failureRedirect: '/auth/failure', session: false }), async (req, res) => {
     try {
-      const SECRET = process.env.SESSION_SECRET || 'change-me';
+      const SECRET = process.env.SESSION_SECRET;
       // Create separate access and refresh tokens
       const accessToken = jwt.sign(
         { id: req.user._id, type: 'access', displayName: req.user.displayName, email: req.user.email },
@@ -101,7 +101,7 @@ router.post('/refresh', async (req, res) => {
   if (!refreshToken) return res.status(400).json({ error: 'Refresh token required' });
 
   try {
-    const SECRET = process.env.SESSION_SECRET || 'change-me';
+    const SECRET = process.env.SESSION_SECRET;
     const payload = jwt.verify(refreshToken, SECRET);
     if (payload.type !== 'refresh') throw new Error('Invalid token type');
 
@@ -137,7 +137,7 @@ router.get('/session', (req, res) => {
   if (auth && auth.startsWith('Bearer ')) {
     const token = auth.slice('Bearer '.length);
     try {
-      const payload = jwt.verify(token, process.env.SESSION_SECRET || 'change-me');
+      const payload = jwt.verify(token, process.env.SESSION_SECRET);
       if (payload.type !== 'access') throw new Error('Invalid token type');
       return res.json({ authenticated: true, user: { _id: payload.id, displayName: payload.displayName, email: payload.email } });
     } catch (err) {

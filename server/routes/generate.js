@@ -22,7 +22,7 @@ function requireAuth(req, res, next) {
   if (auth && auth.startsWith('Bearer ')) {
     const token = auth.slice('Bearer '.length);
     try {
-      const payload = jwt.verify(token, process.env.SESSION_SECRET || 'change-me');
+      const payload = jwt.verify(token, process.env.SESSION_SECRET);
       if (payload.type !== 'access') throw new Error('Invalid token type');
       req.user = { _id: payload.id, displayName: payload.displayName, email: payload.email };
       return next();
@@ -39,7 +39,7 @@ function optionalAuth(req) {
   if (auth && auth.startsWith('Bearer ')) {
     const token = auth.slice('Bearer '.length);
     try {
-      const payload = jwt.verify(token, process.env.SESSION_SECRET || 'change-me');
+      const payload = jwt.verify(token, process.env.SESSION_SECRET);
       if (payload.type === 'access') {
         req.user = { _id: payload.id, displayName: payload.displayName, email: payload.email };
       }
@@ -134,8 +134,8 @@ router.post('/', async (req, res) => {
             weight: 0.1
           },
           {
-            name: 'gemini-2.5-pro',
-            endpoint: 'gemini-2.5-pro:generateContent',
+            name: 'gemini-2.5-flash',
+            endpoint: 'gemini-2.5-flash:generateContent',
             rpm: 15,
             rpd: 1500,
             counters: { rpm: 0, rpd: 0, lastRpmReset: Date.now(), lastRpdReset: Date.now() },

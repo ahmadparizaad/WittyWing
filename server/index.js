@@ -14,6 +14,12 @@ const app = express();
 // Trust proxy headers (useful behind Vercel/Cloudflare/load balancers)
 app.set('trust proxy', true);
 
+// Require SESSION_SECRET to be explicitly set — never fall back to a default in any environment
+if (!process.env.SESSION_SECRET) {
+  console.error('FATAL: SESSION_SECRET environment variable is not set. Refusing to start.');
+  process.exit(1);
+}
+
 // Log configuration at startup for debugging
 console.log('Server configuration:', {
   NODE_ENV: process.env.NODE_ENV,
@@ -48,7 +54,7 @@ app.use(cors({
     if (isAllowed) {
       callback(null, true);
     } else {
-      callback(null, true); // Allow all for development - restrict in production
+      callback(new Error(`CORS: origin '${origin}' not allowed`));
     }
   },
   credentials: true,
