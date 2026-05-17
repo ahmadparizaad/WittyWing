@@ -16,6 +16,44 @@ const tonePromptMap = {
   Thanking: "Compose a short and grateful reply. Be polite and appreciative, but avoid sounding overly formal. Ensure it's a single, very brief sentence."
 };
 
+// Module-level pools — initialized once, persist across requests
+const geminiModelPool = {
+  models: [
+    {
+      name: 'gemini-2.5-flash-lite',
+      endpoint: 'gemini-2.5-flash-lite:generateContent',
+      rpm: 10, rpd: 20,
+      counters: { rpm: 0, rpd: 0, lastRpmReset: Date.now(), lastRpdReset: Date.now() },
+      disabledUntil: null, weight: 0.1
+    },
+    {
+      name: 'gemini-3-flash',
+      endpoint: 'gemini-3-flash-preview:generateContent',
+      rpm: 5, rpd: 20,
+      counters: { rpm: 0, rpd: 0, lastRpmReset: Date.now(), lastRpdReset: Date.now() },
+      disabledUntil: null, weight: 0.1
+    },
+    {
+      name: 'gemini-2.5-flash',
+      endpoint: 'gemini-2.5-flash:generateContent',
+      rpm: 15, rpd: 1500,
+      counters: { rpm: 0, rpd: 0, lastRpmReset: Date.now(), lastRpdReset: Date.now() },
+      disabledUntil: null, weight: 0.35
+    }
+  ],
+  keyState: { index: 0, disabled: {} }
+};
+
+const orModelPool = {
+  models: [
+    { name: 'google/gemma-4-26b-a4b-it:free', disabledUntil: null },
+    { name: 'stepfun/step-3.5-flash:free', disabledUntil: null },
+    { name: 'nvidia/nemotron-3-super-120b-a12b:free', disabledUntil: null },
+    { name: 'openai/gpt-oss-20b:free', disabledUntil: null }
+  ],
+  index: 0
+};
+
 function requireAuth(req, res, next) {
   // JWT-only auth for serverless
   const auth = req.headers.authorization;
@@ -50,7 +88,6 @@ function optionalAuth(req) {
 }
 
 function makePrompt(user, tweet_text, tone, images = []) {
-  // Compose a richer profile summary that includes projects (if any)
   const namePart = user.displayName || user.email || 'Unknown';
   const rolePart = user.role || '';
   const bioPart = user.short_bio || '';
@@ -61,7 +98,9 @@ function makePrompt(user, tweet_text, tone, images = []) {
         .map((p) => {
           const n = (p && p.name) || '';
           const d = (p && p.description) || '';
-          return d ? `${n} (${d})` : `${n}`;
+          const u = (p && p.url) || '';
+          const detail = [d, u].filter(Boolean).join(', ');
+          return detail ? `${n} (${detail})` : n;
         })
         .filter(Boolean)
         .slice(0, 5)
@@ -71,17 +110,32 @@ function makePrompt(user, tweet_text, tone, images = []) {
   } catch (e) {
     projectPart = '';
   }
-  const profileSummary = `${namePart}${rolePart ? ' - ' + rolePart : ''}${bioPart ? ' - ' + bioPart : ''}${projectPart ? ' - ' + projectPart : ''}`;
+
   const tonePrompt = tonePromptMap[tone] || tonePromptMap.Default;
 
   let imageContext = '';
   if (images && images.length > 0) {
-    imageContext = `\n[Images detected in tweet: ${images.length}] Please consider the visual content of the attached images when writing your reply.`;
+    imageContext = ` There are ${images.length} image(s) attached to the tweet — factor in the visual context when crafting the reply.`;
   }
 
-  const prompt = `System: You are an assistant that writes short, natural Twitter replies for a user. Use the user profile and tone to guide the style. Tone: ${tone} - ${tonePrompt}${imageContext}\nUSER: ${profileSummary}\nTweet: ${tweet_text}\n
-Reply with 1 suggested reply that's short and uses the specified tone.`;
-  return prompt;
+  // System message: instructions + user profile context
+  const systemMessage = [
+    `You are a Twitter reply assistant writing on behalf of a specific user. Always reply in first person as that user.`,
+    `Tone: ${tone} — ${tonePrompt}${imageContext}`,
+    ``,
+    `## User Profile`,
+    `Name: ${namePart}`,
+    rolePart ? `Role: ${rolePart}` : null,
+    bioPart ? `Bio: ${bioPart}` : null,
+    projectPart ? projectPart : null,
+    ``,
+    `Write a single reply (max 280 chars) that matches the tone and reflects the user's voice and background. Output only the reply text — no labels, no quotes, no explanation.`,
+  ].filter(v => v !== null).join('\n');
+
+  // User message: just the tweet
+  const userMessage = `Tweet to reply to:\n${tweet_text}`;
+
+  return { systemMessage, userMessage };
 }
 
 router.post('/', async (req, res) => {
@@ -94,77 +148,29 @@ router.post('/', async (req, res) => {
     if (req.user && req.user._id) {
       try {
         user = await User.findById(req.user._id).lean();
+        console.info('[generate] User loaded from DB:', JSON.stringify({ id: user?._id, displayName: user?.displayName, role: user?.role, hasBio: !!user?.short_bio, projectCount: user?.projects?.length }));
       } catch (e) {
         console.warn('Failed to load user profile for optional auth', e);
         user = null;
       }
+    } else {
+      console.warn('[generate] No authenticated user — token missing or invalid. Auth header:', req.headers.authorization ? 'present' : 'absent');
     }
     // If no user is available, use a neutral anonymous profile
     if (!user) {
       user = { displayName: 'WittyWing User', role: '', short_bio: '' };
     }
 
-    const prompt = makePrompt(user, tweet_text, tone, images);
-    console.info('Generation prompt using profile summary:', prompt);
+    const { systemMessage, userMessage } = makePrompt(user, tweet_text, tone, images);
+    console.info('System prompt:\n', systemMessage);
+    console.info('User message:\n', userMessage);
 
     // Setup key pool (backwards compatible: support single key via GEMINI_API_KEY)
     const rawKeyList = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '').split(',').map(k => (k || '').trim()).filter(Boolean);
     const apiKeys = Array.from(new Set(rawKeyList)); // unique
 
-    // Multi-model pool configuration with RPM and RPD limits
-    if (!global._geminiModelPool) {
-      global._geminiModelPool = {
-        models: [
-          {
-            name: 'gemini-2.5-flash-lite',
-            endpoint: 'gemini-2.5-flash-lite:generateContent',
-            rpm: 10,
-            rpd: 20,
-            counters: { rpm: 0, rpd: 0, lastRpmReset: Date.now(), lastRpdReset: Date.now() },
-            disabledUntil: null,
-            weight: 0.1 // Lower weight due to low RPD
-          },
-          {
-            name: 'gemini-3-flash',
-            endpoint: 'gemini-3-flash-preview:generateContent',
-            rpm: 5,
-            rpd: 20,
-            counters: { rpm: 0, rpd: 0, lastRpmReset: Date.now(), lastRpdReset: Date.now() },
-            disabledUntil: null,
-            weight: 0.1
-          },
-          {
-            name: 'gemini-2.5-flash',
-            endpoint: 'gemini-2.5-flash:generateContent',
-            rpm: 15,
-            rpd: 1500,
-            counters: { rpm: 0, rpd: 0, lastRpmReset: Date.now(), lastRpdReset: Date.now() },
-            disabledUntil: null,
-            weight: 0.35
-          }
-        ],
-        keyState: { index: 0, disabled: {} }
-      };
-    }
-    const geminiPool = global._geminiModelPool;
-
-    // OpenRouter Free Model Pool for failover
-    if (!global._orModelPool) {
-      global._orModelPool = {
-        models: [
-          { name: 'google/gemma-3-27b-it:free', disabledUntil: null },
-          { name: 'meta-llama/llama-3.3-70b-instruct:free', disabledUntil: null },
-          { name: 'deepseek/deepseek-r1:free', disabledUntil: null },
-          { name: 'qwen/qwen-3-235b-a22b-thinking:free', disabledUntil: null },
-          { name: 'arcee-ai/trinity-large-preview:free', disabledUntil: null },
-          { name: 'stepfun/step-3.5-flash:free', disabledUntil: null },
-          { name: 'nvidia/nemotron-3-nano-30b-a3b:free', disabledUntil: null },
-          { name: 'openai/gpt-oss-120b:free', disabledUntil: null }
-        ],
-        index: 0
-      };
-    }
-    const orPool = global._orModelPool;
+    const geminiPool = geminiModelPool;
+    const orPool = orModelPool;
 
     // Enhanced counter reset and utilization logic
     function resetCountersIfNeeded() {
@@ -255,7 +261,7 @@ router.post('/', async (req, res) => {
       return orPool.models[0]; // Absolute fallback
     }
 
-    async function callGeminiModelPool(p, images = []) {
+    async function callGeminiModelPool(p, images = [], sysMsg = '') {
       if (!apiKeys || apiKeys.length === 0) return { error: 'no-api-keys' };
 
       const maxModelAttempts = 3;
@@ -286,16 +292,15 @@ router.post('/', async (req, res) => {
           }
 
           try {
-            // Build multimodal request parts for Gemini (using simplified text context for now)
             const parts = [{ text: p }];
 
-            const resp = await axios.post(modelUrl, { 
+            const geminiBody = {
               contents: [{ parts: parts }],
-              generationConfig: {
-                maxOutputTokens: 150,
-                temperature: 0.7
-              }
-            }, {
+              generationConfig: { maxOutputTokens: 150, temperature: 0.7 }
+            };
+            if (sysMsg) geminiBody.systemInstruction = { parts: [{ text: sysMsg }] };
+
+            const resp = await axios.post(modelUrl, geminiBody, {
               headers: { 'Content-Type': 'application/json', 'X-goog-api-key': candidateKey },
               timeout: 30000
             });
@@ -303,7 +308,7 @@ router.post('/', async (req, res) => {
             model.counters.rpm++;
             model.counters.rpd++;
             console.info(`Gemini success: ${model.name}, RPM: ${model.counters.rpm}/${model.rpm}`);
-            
+
             const json = resp.data;
             const text = json?.candidates?.[0]?.content?.parts?.[0]?.text || json?.output || JSON.stringify(json);
             return { text, key: candidateKey, model: model.name };
@@ -370,13 +375,12 @@ router.post('/', async (req, res) => {
     const OR_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OR_API_KEY) return { error: 'no-or-key' };
 
-    const orPool = global._orModelPool;
-    const maxORAttempts = 5; 
+    const maxORAttempts = 5;
     let orAttempts = 0;
 
     // Instructions for JSON format if structured is requested
-    const structuredSystem = options.structured 
-      ? `You MUST output ONLY a single JSON object matching: {"reply": string (<=280 chars), "tone": string (one of: ${Object.keys(tonePromptMap).join(', ')}), "reason": optional string (<=120 chars)}. Do not output any additional text, explanation, or markdown.`
+    const structuredSystem = options.structured
+      ? `OUTPUT FORMAT: You MUST respond with ONLY a raw JSON object — no preamble, no reasoning, no markdown, no explanation. The JSON must match exactly: {"reply": "<string, max 280 chars>", "tone": "<one of: ${Object.keys(tonePromptMap).join(', ')}>", "reason": "<optional string, max 120 chars>"}. First character of your response must be '{'.`
       : "";
 
     while (orAttempts < maxORAttempts) {
@@ -387,19 +391,24 @@ router.post('/', async (req, res) => {
       console.log(`[OR-Pool] Trying model: ${modelName} (Attempt ${orAttempts + 1}/${maxORAttempts})`);
 
       try {
-        const combinedContent = structuredSystem ? `${structuredSystem}\n\nUser Request: ${promptInput}` : promptInput;
-        
-        // Prepare multimodal messages for models that support vision
+        // Build messages with proper system role
         const messages = [];
+
+        // System role: profile context + tone instructions (+ JSON format if structured)
+        const systemParts = [options.systemMessage || promptInput];
+        if (structuredSystem) systemParts.push(structuredSystem);
+        messages.push({ role: 'system', content: systemParts.join('\n\n') });
+
+        // User role: the tweet (with optional images)
+        const userText = options.userMessage || promptInput;
         if (options.images && options.images.length > 0) {
-            const content = [{ type: 'text', text: combinedContent }];
-            // Add up to 3 images to the message for OpenRouter
-            options.images.slice(0, 3).forEach(url => {
-                content.push({ type: 'image_url', image_url: { url } });
-            });
-            messages.push({ role: 'user', content });
+          const content = [{ type: 'text', text: userText }];
+          options.images.slice(0, 3).forEach(url => {
+            content.push({ type: 'image_url', image_url: { url } });
+          });
+          messages.push({ role: 'user', content });
         } else {
-            messages.push({ role: 'user', content: combinedContent });
+          messages.push({ role: 'user', content: userText });
         }
 
         const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
@@ -423,13 +432,24 @@ router.post('/', async (req, res) => {
         // If structured was requested, try to parse JSON
         if (options.structured) {
           try {
-            const cleanedText = rawText.replace(/```json|```/g, '').trim();
+            // Extract JSON object even if surrounded by reasoning text
+            const jsonMatch = rawText.match(/\{[\s\S]*"reply"[\s\S]*\}/);
+            const cleanedText = jsonMatch ? jsonMatch[0] : rawText.replace(/```json|```/g, '').trim();
             const parsed = JSON.parse(cleanedText);
             if (parsed && typeof parsed.reply === 'string') {
               finalReply = parsed.reply;
+            } else {
+              // JSON parsed but no reply field — skip this attempt
+              console.warn(`[OR-Pool] JSON missing reply field for ${modelName}. Retrying.`);
+              orAttempts++;
+              continue;
             }
           } catch (e) {
-            console.warn(`[OR-Pool] JSON Parse failed for ${modelName}. Using raw text.`);
+            // JSON parse failed entirely — discard reasoning text, retry with next model
+            console.warn(`[OR-Pool] JSON Parse failed for ${modelName}. Discarding response.`);
+            modelObj.disabledUntil = Date.now() + 30000;
+            orAttempts++;
+            continue;
           }
         }
 
@@ -512,17 +532,16 @@ router.post('/', async (req, res) => {
         // Try Gemini model pool first
         geminiAttempted = true;
         try {
-          const geminiResp = await callGeminiModelPool(prompt, images);
+          const geminiResp = await callGeminiModelPool(userMessage, images, systemMessage);
           if (geminiResp && geminiResp.text) {
             await incrementUsage();
-            return res.json({ reply: geminiResp.text, prompt, model: geminiResp.model });
+            return res.json({ reply: geminiResp.text, model: geminiResp.model });
           }
-          geminiError = geminiResp; // Includes backoff/exhausted info
+          geminiError = geminiResp;
         } catch (e) {
           geminiError = e.message || e;
         }
-        
-        // If Gemini failed due to 429/Exhaustion, we might want to wait or just proceed to OpenRouter
+
         if (geminiError?.backoffActive) {
           console.info('Proceeding to OpenRouter because Gemini pool is currently throttled.');
         }
@@ -531,11 +550,11 @@ router.post('/', async (req, res) => {
       // Use OpenRouter for remaining authenticated calls
       openRouterAttempted = true;
       try {
-        const orResp = await callOpenRouter(prompt, { structured: true, tone: toneKey, images: images });
+        const orResp = await callOpenRouter(userMessage, { structured: true, tone: toneKey, images, systemMessage, userMessage });
         if (orResp && orResp.text) {
           await incrementUsage();
           console.info(`Generation successful (Auth Tier) via OpenRouter [${orResp.model}]`);
-          return res.json({ reply: orResp.text, prompt, model: orResp.model });
+          return res.json({ reply: orResp.text, model: orResp.model });
         }
         openrouterError = orResp || 'no-response';
       } catch (e) {
@@ -545,25 +564,25 @@ router.post('/', async (req, res) => {
       // Anonymous users: default to OpenRouter
       openRouterAttempted = true;
       try {
-        const orResp = await callOpenRouter(prompt, { structured: true, tone: toneKey, images: images });
+        const orResp = await callOpenRouter(userMessage, { structured: true, tone: toneKey, images, systemMessage, userMessage });
         if (orResp && orResp.text) {
           await incrementUsage();
           console.info(`Generation successful (Anon Tier) via OpenRouter [${orResp.model}]`);
-          return res.json({ reply: orResp.text, prompt, model: orResp.model });
+          return res.json({ reply: orResp.text, model: orResp.model });
         }
         openrouterError = orResp || 'no-response';
       } catch (e) {
         openrouterError = e.message || e;
       }
-      
+
       // If OpenRouter failed, try Gemini as secondary fallback ONLY if keys not exhausted
       if (apiKeys.length > 0) {
         geminiAttempted = true;
         try {
-          const geminiResp = await callGeminiModelPool(prompt, images);
+          const geminiResp = await callGeminiModelPool(userMessage, images, systemMessage);
           if (geminiResp && geminiResp.text) {
             await incrementUsage();
-            return res.json({ reply: geminiResp.text, prompt, model: geminiResp.model });
+            return res.json({ reply: geminiResp.text, model: geminiResp.model });
           }
           geminiError = geminiResp || geminiError || 'no-response';
         } catch (e) {
