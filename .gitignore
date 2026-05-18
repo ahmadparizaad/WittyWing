@@ -27,3 +27,5 @@ npm-debug.log*
 
 # Backup files
 *.bak
+
+server/VERCEL_DEPLOYMENT.md
