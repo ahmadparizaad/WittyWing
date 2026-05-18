@@ -29,3 +29,4 @@ npm-debug.log*
 *.bak
 
 server/VERCEL_DEPLOYMENT.md
+*.zip
