@@ -6,7 +6,10 @@ interface PlanStatusBannerProps {
 
 function daysRemaining(expiresAt: string | null): number {
   if (!expiresAt) return 0;
-  return Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+  return Math.max(
+    0,
+    Math.ceil((new Date(expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+  );
 }
 
 export function PlanStatusBanner({ status }: PlanStatusBannerProps) {
@@ -15,19 +18,27 @@ export function PlanStatusBanner({ status }: PlanStatusBannerProps) {
     const low = balance <= 10;
 
     return (
-      <div className={`flex items-center justify-between rounded-lg px-3 py-2 text-[12px] mb-3 ${
-        low
-          ? 'bg-amber-500/10 border border-amber-500/20 text-amber-300'
-          : 'bg-white/[0.04] border border-white/[0.06] text-muted'
-      }`}>
+      <div
+        className={`flex items-center justify-between rounded-lg px-3 py-2 text-[12px] mb-3 ${
+          low
+            ? 'bg-amber-500/10 border border-amber-500/20 text-amber-300'
+            : 'bg-white/[0.04] border border-white/[0.06] text-muted'
+        }`}
+      >
         <span>
           {low ? '⚠️ ' : '✦ '}
-          <span className="font-semibold text-text">{balance}</span> {balance === 1 ? 'credit' : 'credits'} remaining
+          <span className="font-semibold text-text">{balance}</span>{' '}
+          {balance === 1 ? 'credit' : 'credits'} remaining
         </span>
         {low && (
-          <span className="text-amber-400 font-semibold cursor-pointer hover:text-amber-300 transition-colors">
+          <a
+            href="https://ahmadparizaad.github.io/twitter-automation/#pricing"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-amber-400 font-semibold hover:text-amber-300 transition-colors"
+          >
             Top up →
-          </span>
+          </a>
         )}
       </div>
     );
@@ -40,9 +51,14 @@ export function PlanStatusBanner({ status }: PlanStatusBannerProps) {
     return (
       <div className="flex items-center justify-between rounded-lg px-3 py-2 text-[12px] mb-3 bg-red-500/10 border border-red-500/20 text-red-300">
         <span>🔒 Free trial ended</span>
-        <span className="text-red-400 font-semibold cursor-pointer hover:text-red-300 transition-colors">
+        <a
+          href="https://ahmadparizaad.github.io/twitter-automation/#pricing"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-red-400 font-semibold hover:text-red-300 transition-colors"
+        >
           Get credits →
-        </span>
+        </a>
       </div>
     );
   }
@@ -55,15 +71,18 @@ export function PlanStatusBanner({ status }: PlanStatusBannerProps) {
   const urgent = days <= 1 || remaining <= 2;
 
   return (
-    <div className={`rounded-lg px-3 py-2 text-[12px] mb-3 ${
-      urgent
-        ? 'bg-amber-500/10 border border-amber-500/20'
-        : 'bg-white/[0.04] border border-white/[0.06]'
-    }`}>
+    <div
+      className={`rounded-lg px-3 py-2 text-[12px] mb-3 ${
+        urgent
+          ? 'bg-amber-500/10 border border-amber-500/20'
+          : 'bg-white/[0.04] border border-white/[0.06]'
+      }`}
+    >
       <div className="flex items-center justify-between mb-1.5">
         <span className={urgent ? 'text-amber-300' : 'text-muted'}>
           {urgent ? '⚡ ' : '🎯 '}
-          Free trial — <span className="font-semibold text-text">{days}</span> {days === 1 ? 'day' : 'days'} left
+          Free trial — <span className="font-semibold text-text">{days}</span>{' '}
+          {days === 1 ? 'day' : 'days'} left
         </span>
         <span className={urgent ? 'text-amber-300' : 'text-muted'}>
           <span className="font-semibold text-text">{remaining}</span>/{limit} today
