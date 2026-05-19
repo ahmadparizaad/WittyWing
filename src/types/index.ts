@@ -35,6 +35,26 @@ export interface ProfileState {
 
 export type Page = 'auth' | 'profile-view' | 'profile-edit';
 
+export interface TrialStatus {
+  active: boolean;
+  startedAt: string | null;
+  expiresAt: string | null;
+  dailyLimit: number;
+  usedToday: number;
+  remainingToday: number;
+}
+
+export interface CreditsStatus {
+  balance: number;
+  used: number;
+}
+
+export interface PlanStatus {
+  plan: 'trial' | 'credits';
+  trial: TrialStatus;
+  credits: CreditsStatus;
+}
+
 export interface SessionResponse {
   authenticated: boolean;
   user?: User;

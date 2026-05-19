@@ -1,5 +1,8 @@
 import { useEffect } from 'react';
 import { useProfileStore } from '../store';
+import { useAuthStore } from '../store/authStore';
+import { usePlanStatus } from '../hooks/usePlanStatus';
+import { PlanStatusBanner } from './PlanStatusBanner';
 import type { Page } from '../types';
 
 interface ProfileViewProps {
@@ -9,6 +12,8 @@ interface ProfileViewProps {
 
 export function ProfileView({ onNavigate, onStatusMessage }: ProfileViewProps) {
   const { profile, isLoading, loadProfile } = useProfileStore();
+  const { serverJwt } = useAuthStore();
+  const { status: planStatus } = usePlanStatus(serverJwt);
 
   useEffect(() => {
     loadProfile();
@@ -62,6 +67,8 @@ export function ProfileView({ onNavigate, onStatusMessage }: ProfileViewProps) {
 
   return (
     <section className="popup-page">
+      {planStatus && <PlanStatusBanner status={planStatus} />}
+
       <h3 className="my-2 text-sm font-semibold">Profile</h3>
 
       <div className="my-2">
