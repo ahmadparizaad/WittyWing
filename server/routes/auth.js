@@ -26,7 +26,13 @@ if (isGoogleOAuthConfigured) {
   try {
     let user = await User.findOne({ googleId: profile.id });
     if (!user) {
-      user = new User({ googleId: profile.id, displayName: profile.displayName, email: profile.emails && profile.emails[0] && profile.emails[0].value });
+      user = new User({
+        googleId: profile.id,
+        displayName: profile.displayName,
+        email: profile.emails && profile.emails[0] && profile.emails[0].value,
+        trialStartedAt: new Date(),
+        plan: 'trial',
+      });
       await user.save();
     }
     return done(null, user);
@@ -116,7 +122,17 @@ router.post('/refresh', async (req, res) => {
       { expiresIn: '15m' }
     );
 
-    res.json({ accessToken: newAccessToken });
+    const newRefreshToken = jwt.sign(
+      { id: user._id, type: 'refresh' },
+      SECRET,
+      { expiresIn: '7d' }
+    );
+
+    user.refreshToken = newRefreshToken;
+    user.refreshTokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await user.save();
+
+    res.json({ accessToken: newAccessToken, refreshToken: newRefreshToken });
   } catch (err) {
     return res.status(401).json({ error: 'Invalid refresh token' });
   }
@@ -147,8 +163,22 @@ router.get('/session', (req, res) => {
   return res.json({ authenticated: false });
 });
 
-router.post('/logout', (req, res) => {
-  // JWT-based logout - client should remove tokens
+router.post('/logout', async (req, res) => {
+  const { refreshToken } = req.body;
+  if (refreshToken) {
+    try {
+      const SECRET = process.env.SESSION_SECRET;
+      const payload = jwt.verify(refreshToken, SECRET);
+      const user = await User.findById(payload.id);
+      if (user && user.refreshToken === refreshToken) {
+        user.refreshToken = null;
+        user.refreshTokenExpiresAt = null;
+        await user.save();
+      }
+    } catch (_) {
+      // invalid token — still complete logout
+    }
+  }
   res.json({ ok: true, message: 'Logged out successfully' });
 });
 

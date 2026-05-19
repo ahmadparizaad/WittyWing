@@ -8,6 +8,7 @@ const connectDB = require('./db');
 const authRoutes = require('./routes/auth');
 const profileRoutes = require('./routes/profile');
 const generateRoutes = require('./routes/generate');
+const creditsRoutes = require('./routes/credits');
 
 const app = express();
 
@@ -83,6 +84,7 @@ app.use(async (req, res, next) => {
 app.use('/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/generate', generateRoutes);
+app.use('/api/credits', creditsRoutes);
 
 app.get('/', (req, res) => {
   res.json({ 

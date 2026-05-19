@@ -3,7 +3,6 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const User = require('../models/User');
-const IpUsage = require('../models/IpUsage');
 
 const tonePromptMap = {
   Default: "Write a natural, concise reply as if you're responding to a friend's tweet. Don't sound robotic or overly formal.",
@@ -73,7 +72,7 @@ function requireAuth(req, res, next) {
 
 // Optional auth - does not reject on missing/invalid token
 function optionalAuth(req) {
-  const auth = req.headers.authorization;
+  const auth = req.headers.authorization; 
   if (auth && auth.startsWith('Bearer ')) {
     const token = auth.slice('Bearer '.length);
     try {
@@ -335,6 +334,9 @@ router.post('/', async (req, res) => {
     }
 
 
+  const TRIAL_DURATION_MS = 3 * 24 * 60 * 60 * 1000;
+  const TRIAL_DAILY_LIMIT = Number(process.env.TRIAL_DAILY_LIMIT || 10);
+
   function isSameDay(d1, d2) {
     if (!d1) return false;
     const a = new Date(d1);
@@ -342,36 +344,51 @@ router.post('/', async (req, res) => {
     return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
   }
 
-  async function getUserUsageDoc(userId) {
-    const now = new Date();
+  // Returns { user, allowed, reason } — mutates nothing
+  async function checkAndLoadUser(userId) {
     const user = await User.findById(userId).exec();
-    if (!user) return null;
-    if (!user.usage || !isSameDay(user.usage.lastReset, now)) {
-      user.usage = user.usage || { dailyCount: 0, lastReset: now };
-      user.usage.dailyCount = 0;
-      user.usage.lastReset = now;
-      await user.save();
-    }
-    return user;
-  }
+    if (!user) return { user: null, allowed: false, reason: 'user-not-found' };
 
-  async function getIpUsageDoc(ip) {
     const now = new Date();
-    let rec = await IpUsage.findOne({ ip }).exec();
-    if (!rec) {
-      rec = new IpUsage({ ip, dailyCount: 0, lastReset: now });
-      await rec.save();
-      return rec;
+    const plan = user.plan || 'trial';
+
+    if (plan === 'trial') {
+      const trialStarted = user.trialStartedAt;
+      if (!trialStarted || Date.now() - trialStarted.getTime() >= TRIAL_DURATION_MS) {
+        return { user, allowed: false, reason: 'trial-expired' };
+      }
+      // Reset daily count if it's a new day
+      const usedToday = isSameDay(user.trialDailyReset, now) ? (user.trialDailyCount || 0) : 0;
+      if (usedToday >= TRIAL_DAILY_LIMIT) {
+        return { user, allowed: false, reason: 'trial-daily-limit' };
+      }
+      return { user, allowed: true, reason: 'trial', usedToday };
     }
-    if (!isSameDay(rec.lastReset, now)) {
-      rec.dailyCount = 0;
-      rec.lastReset = now;
-      await rec.save();
+
+    if (plan === 'credits') {
+      if ((user.credits || 0) <= 0) {
+        return { user, allowed: false, reason: 'no-credits' };
+      }
+      return { user, allowed: true, reason: 'credits' };
     }
-    return rec;
+
+    return { user, allowed: false, reason: 'unknown-plan' };
   }
 
-  async function callOpenRouter(promptInput, options = {}) {
+  async function consumeUsage(user, reason) {
+    if (reason === 'trial') {
+      const now = new Date();
+      const usedToday = isSameDay(user.trialDailyReset, now) ? (user.trialDailyCount || 0) : 0;
+      user.trialDailyCount = usedToday + 1;
+      user.trialDailyReset = now;
+    } else if (reason === 'credits') {
+      user.credits = Math.max(0, (user.credits || 0) - 1);
+      user.creditsUsed = (user.creditsUsed || 0) + 1;
+    }
+    await user.save();
+  }
+
+async function callOpenRouter(promptInput, options = {}) {
     const OR_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OR_API_KEY) return { error: 'no-or-key' };
 
@@ -415,7 +432,8 @@ router.post('/', async (req, res) => {
           model: modelName,
           messages: messages,
           temperature: 0.7,
-          max_tokens: 300
+          max_tokens: 300,
+          reasoning: { enabled: false }
         }, {
           headers: {
             'Authorization': `Bearer ${OR_API_KEY}`,
@@ -426,7 +444,10 @@ router.post('/', async (req, res) => {
           timeout: 25000
         });
 
-        const rawText = response.data?.choices?.[0]?.message?.content || "";
+        const rawMessage = response.data?.choices?.[0]?.message;
+        console.info(`[OR-Pool][${modelName}] Raw message object:`, JSON.stringify(rawMessage));
+        const rawText = rawMessage?.content || "";
+        console.info(`[OR-Pool][${modelName}] rawText extracted: "${rawText}"`);
         let finalReply = rawText;
 
         // If structured was requested, try to parse JSON
@@ -478,117 +499,59 @@ router.post('/', async (req, res) => {
 
     return { error: 'or-pool-exhausted' };
   }
-    // Determine client IP (respect X-Forwarded-For when present)
-    const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || req.connection?.remoteAddress || '';
-
-    // Usage limits
-    const AUTH_DAILY_LIMIT = Number(process.env.AUTH_DAILY_LIMIT || 70);
-    const AUTH_GEMINI_THRESHOLD = Number(process.env.AUTH_GEMINI_THRESHOLD || 5);
-    const ANON_DAILY_LIMIT = Number(process.env.ANON_DAILY_LIMIT || 5);
-
-    const isAuthenticated = !!(req.user && req.user._id);
-
-    // Load usage record (auth user -> User.usage, anon -> IpUsage)
-    let usageDoc = null;
-    if (isAuthenticated) {
-      usageDoc = await getUserUsageDoc(req.user._id);
-      if (!usageDoc) {
-        console.warn('Authenticated user not found for usage tracking:', req.user._id);
-      }
-      if (usageDoc && usageDoc.usage && usageDoc.usage.dailyCount >= AUTH_DAILY_LIMIT) {
-        return res.status(429).json({ error: 'Daily generation limit reached' });
-      }
-    } else {
-      usageDoc = await getIpUsageDoc(clientIp || 'unknown');
-      if (usageDoc && usageDoc.dailyCount >= ANON_DAILY_LIMIT) {
-        return res.status(429).json({ error: 'Daily generation limit reached for anonymous users' });
-      }
+    // Authenticated users only
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ error: 'Sign in required to generate replies' });
     }
 
-    // Helper to increment usage after a successful generation
-    async function incrementUsage() {
-      if (isAuthenticated) {
-        if (!usageDoc.usage) usageDoc.usage = { dailyCount: 0, lastReset: new Date() };
-        usageDoc.usage.dailyCount = (usageDoc.usage.dailyCount || 0) + 1;
-        await usageDoc.save();
-      } else {
-        usageDoc.dailyCount = (usageDoc.dailyCount || 0) + 1;
-        await usageDoc.save();
-      }
+    // Check plan and enforce limits
+    const { user: usageDoc, allowed, reason, usedToday } = await checkAndLoadUser(req.user._id);
+
+    if (!allowed) {
+      const messages = {
+        'trial-expired': 'Your 3-day free trial has ended. Purchase credits to continue.',
+        'trial-daily-limit': `Daily trial limit of ${TRIAL_DAILY_LIMIT} replies reached. Come back tomorrow or purchase credits.`,
+        'no-credits': 'No credits remaining. Purchase credits to continue.',
+        'user-not-found': 'User not found.',
+      };
+      return res.status(429).json({
+        error: messages[reason] || 'Generation limit reached',
+        reason,
+      });
     }
 
-    // Routing logic:
-    // - Authenticated: first AUTH_GEMINI_THRESHOLD calls -> Gemini; next up to AUTH_DAILY_LIMIT -> OpenRouter
-    // - Anonymous: calls -> OpenRouter until ANON_DAILY_LIMIT
-    let generated = null;
     let geminiAttempted = false;
     let openRouterAttempted = false;
     let geminiError = null;
     let openrouterError = null;
 
-    if (isAuthenticated) {
-      const currentCount = usageDoc?.usage?.dailyCount || 0;
-      if (currentCount < AUTH_GEMINI_THRESHOLD && apiKeys.length > 0) {
-        // Try Gemini model pool first
-        geminiAttempted = true;
-        try {
-          const geminiResp = await callGeminiModelPool(userMessage, images, systemMessage);
-          if (geminiResp && geminiResp.text) {
-            await incrementUsage();
-            return res.json({ reply: geminiResp.text, model: geminiResp.model });
-          }
-          geminiError = geminiResp;
-        } catch (e) {
-          geminiError = e.message || e;
-        }
-
-        if (geminiError?.backoffActive) {
-          console.info('Proceeding to OpenRouter because Gemini pool is currently throttled.');
-        }
-      }
-
-      // Use OpenRouter for remaining authenticated calls
-      openRouterAttempted = true;
+    // Trial users: try Gemini first (free quota), fall back to OpenRouter
+    // Credits users: go straight to OpenRouter (better quality, metered usage)
+    if (reason === 'trial' && apiKeys.length > 0) {
+      geminiAttempted = true;
       try {
-        const orResp = await callOpenRouter(userMessage, { structured: true, tone: toneKey, images, systemMessage, userMessage });
-        if (orResp && orResp.text) {
-          await incrementUsage();
-          console.info(`Generation successful (Auth Tier) via OpenRouter [${orResp.model}]`);
-          return res.json({ reply: orResp.text, model: orResp.model });
+        const geminiResp = await callGeminiModelPool(userMessage, images, systemMessage);
+        if (geminiResp && geminiResp.text) {
+          await consumeUsage(usageDoc, reason);
+          return res.json({ reply: geminiResp.text, model: geminiResp.model });
         }
-        openrouterError = orResp || 'no-response';
+        geminiError = geminiResp;
       } catch (e) {
-        openrouterError = e.message || e;
+        geminiError = e.message || e;
       }
-    } else {
-      // Anonymous users: default to OpenRouter
-      openRouterAttempted = true;
-      try {
-        const orResp = await callOpenRouter(userMessage, { structured: true, tone: toneKey, images, systemMessage, userMessage });
-        if (orResp && orResp.text) {
-          await incrementUsage();
-          console.info(`Generation successful (Anon Tier) via OpenRouter [${orResp.model}]`);
-          return res.json({ reply: orResp.text, model: orResp.model });
-        }
-        openrouterError = orResp || 'no-response';
-      } catch (e) {
-        openrouterError = e.message || e;
-      }
+    }
 
-      // If OpenRouter failed, try Gemini as secondary fallback ONLY if keys not exhausted
-      if (apiKeys.length > 0) {
-        geminiAttempted = true;
-        try {
-          const geminiResp = await callGeminiModelPool(userMessage, images, systemMessage);
-          if (geminiResp && geminiResp.text) {
-            await incrementUsage();
-            return res.json({ reply: geminiResp.text, model: geminiResp.model });
-          }
-          geminiError = geminiResp || geminiError || 'no-response';
-        } catch (e) {
-          geminiError = e.message || e;
-        }
+    // OpenRouter for credits users and as Gemini fallback for trial
+    openRouterAttempted = true;
+    try {
+      const orResp = await callOpenRouter(userMessage, { structured: true, tone: toneKey, images, systemMessage, userMessage });
+      if (orResp && orResp.text) {
+        await consumeUsage(usageDoc, reason);
+        return res.json({ reply: orResp.text, model: orResp.model });
       }
+      openrouterError = orResp || 'no-response';
+    } catch (e) {
+      openrouterError = e.message || e;
     }
 
     // If we attempted upstream services but none produced a usable reply, return 502 with diagnostics
@@ -596,14 +559,13 @@ router.post('/', async (req, res) => {
       return res.status(502).json({ error: 'Upstream generation failed', details: { geminiAttempted, openRouterAttempted, geminiError, openrouterError } });
     }
 
-    // Fallback deterministic reply
+    // Fallback deterministic reply (both upstream providers failed)
     let reply = '';
-    // Use first project for fallback personalization when available
-    const firstProject = (user && Array.isArray(user.projects) && user.projects.length > 0) ? user.projects[0] : null;
+    const firstProject = (usageDoc && Array.isArray(usageDoc.projects) && usageDoc.projects.length > 0) ? usageDoc.projects[0] : null;
     const firstProjectName = firstProject && (firstProject.name || '').trim();
     switch (toneKey) {
       case 'Funny':
-        reply = `😂 ${user.displayName || 'I'} would say: "That's hilarious!"`;
+        reply = `😂 ${usageDoc?.displayName || 'I'} would say: "That's hilarious!"`;
         break;
       case 'Sarcastic':
         reply = `Sure, because that's exactly what we needed today.`;
@@ -627,7 +589,7 @@ router.post('/', async (req, res) => {
         reply = `Nice! Thanks for sharing.`;
     }
 
-    return res.json({ reply, prompt });
+    return res.json({ reply });
   } catch (err) {
     console.error('Error generating reply:', err);
     res.status(500).json({ error: 'Generation failed', details: err.message });
