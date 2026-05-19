@@ -817,8 +817,12 @@
       border: 1px solid var(--border);
     }
 
-    @media (max-width: 760px) {
-      .pricing-grid { grid-template-columns: 1fr; }
+    @media (max-width: 1000px) {
+      .pricing-grid { grid-template-columns: repeat(2, 1fr) !important; }
+    }
+
+    @media (max-width: 560px) {
+      .pricing-grid { grid-template-columns: 1fr !important; }
     }
 
     .pricing-card {
@@ -1062,9 +1066,12 @@
       <div class="hero-actions">
         <a href="https://chromewebstore.google.com" class="btn-primary" target="_blank" rel="noopener">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.418 0-8-3.582-8-8s3.582-8 8-8 8 3.582 8 8-3.582 8-8 8zm-1-13v6l5 3-1 1.73L9 14V7h2z"/></svg>
-          Add to Chrome — Free
+          Start Free Trial
         </a>
-        <span class="hero-stat">Works on x.com &amp; twitter.com</span>
+        <div style="display:flex;flex-direction:column;gap:0.3rem;">
+          <span class="hero-stat" style="color:var(--ink);font-weight:500;">3 days free · 10 replies/day · no card needed</span>
+          <span class="hero-stat">Then from ₹49 for 100 replies · <a href="#pricing" style="color:var(--muted);text-decoration:underline;">see pricing</a></span>
+        </div>
       </div>
     </div>
 
@@ -1278,20 +1285,32 @@
 
     <div class="pricing-intro">
       <div class="section-label">Pricing</div>
-      <h2 class="section-title">Pay only for<br/>what you <em style="font-style:italic">use.</em></h2>
-      <p>Start with a 3-day free trial — 10 replies a day, no card required. When you're ready, buy a credit pack. One credit = one reply. Credits never expire.</p>
+      <h2 class="section-title">Free to start.<br/><em style="font-style:italic">Cheap</em> to keep.</h2>
+      <p>Try it free for 3 days — no card, no catch. When you're hooked, top up with credits. One credit = one reply. Credits never expire.</p>
     </div>
 
-    <!-- trial banner -->
-    <div class="trial-strip fade-up" style="border:1px solid rgba(255,255,255,0.08); border-radius:4px; margin-bottom:1.5rem;">
-      <span class="trial-strip-tag">Free Trial</span>
-      <span class="trial-strip-text"><strong>3 days · 10 replies/day · sign in with Google.</strong> No card. No catch. Just try it.</span>
-    </div>
+    <div class="pricing-grid" style="grid-template-columns: repeat(4,1fr);">
 
-    <div class="pricing-grid">
+      <!-- Free Trial — always first, most prominent -->
+      <div class="pricing-card featured fade-up" style="border-right:1px solid rgba(255,255,255,0.1);">
+        <div class="pricing-badge">Start Here</div>
+        <div class="pricing-name">Free Trial</div>
+        <div class="pricing-replies">3 days · 10/day</div>
+        <div class="pricing-price">
+          <span class="price-inr" style="font-size:2.2rem;">₹0</span>
+        </div>
+        <div class="price-per-reply">No card. No catch.</div>
+        <ul class="pricing-features">
+          <li>30 replies total</li>
+          <li>All 8 tone modes</li>
+          <li>Personalized to your profile</li>
+          <li>Sign in with Google</li>
+        </ul>
+        <a href="https://chromewebstore.google.com" class="pricing-cta pricing-cta-gold" target="_blank" rel="noopener">Add to Chrome →</a>
+      </div>
 
       <!-- Starter -->
-      <div class="pricing-card fade-up">
+      <div class="pricing-card fade-up stagger-1">
         <div class="pricing-name">Starter</div>
         <div class="pricing-replies">100 replies</div>
         <div class="pricing-price">
@@ -1307,9 +1326,9 @@
         <a href="mailto:bhushanpungliya@gmail.com?subject=WittyWing%20Starter%20Pack&body=Hi%2C%20I%27d%20like%20to%20buy%20the%20Starter%20pack%20(100%20credits%20%E2%80%94%20%E2%82%B949).%20My%20registered%20email%20is%3A%20" class="pricing-cta pricing-cta-outline">Buy via UPI →</a>
       </div>
 
-      <!-- Popular (featured) -->
-      <div class="pricing-card featured fade-up stagger-1">
-        <div class="pricing-badge">Most Popular</div>
+      <!-- Popular -->
+      <div class="pricing-card fade-up stagger-2" style="position:relative;">
+        <div class="pricing-badge" style="background:var(--rust);color:#fff;">Most Popular</div>
         <div class="pricing-name">Popular</div>
         <div class="pricing-replies">500 replies</div>
         <div class="pricing-price">
@@ -1323,11 +1342,11 @@
           <li>Credits never expire</li>
           <li>Priority support</li>
         </ul>
-        <a href="mailto:bhushanpungliya@gmail.com?subject=WittyWing%20Popular%20Pack&body=Hi%2C%20I%27d%20like%20to%20buy%20the%20Popular%20pack%20(500%20credits%20%E2%80%94%20%E2%82%B9199).%20My%20registered%20email%20is%3A%20" class="pricing-cta pricing-cta-gold">Buy via UPI →</a>
+        <a href="mailto:bhushanpungliya@gmail.com?subject=WittyWing%20Popular%20Pack&body=Hi%2C%20I%27d%20like%20to%20buy%20the%20Popular%20pack%20(500%20credits%20%E2%80%94%20%E2%82%B9199).%20My%20registered%20email%20is%3A%20" class="pricing-cta pricing-cta-outline">Buy via UPI →</a>
       </div>
 
       <!-- Power -->
-      <div class="pricing-card fade-up stagger-2">
+      <div class="pricing-card fade-up stagger-3">
         <div class="pricing-name">Power</div>
         <div class="pricing-replies">1500 replies</div>
         <div class="pricing-price">
