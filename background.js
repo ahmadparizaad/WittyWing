@@ -1,6 +1,53 @@
 import { axios } from './libs/axios-esm.js';
 import { SERVER_URL } from './src/config.ts';
 
+function decodeJWT(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = parts[1]
+      .replace(/-/g, '+')
+      .replace(/_/g, '/')
+      .padEnd(Math.ceil(parts[1].length / 4) * 4, '=');
+    return JSON.parse(atob(payload));
+  } catch {
+    return null;
+  }
+}
+
+async function getFreshToken() {
+  const result = await new Promise((resolve) =>
+    chrome.storage.local.get(['serverJwt', 'refreshToken'], resolve)
+  );
+  const { serverJwt, refreshToken } = result;
+
+  if (!serverJwt) return null;
+
+  const payload = decodeJWT(serverJwt);
+  const expiresInSeconds = payload?.exp ? payload.exp - Math.floor(Date.now() / 1000) : 0;
+
+  // Token is still fresh — return it as-is
+  if (expiresInSeconds > 120) return serverJwt;
+
+  // Token is expiring soon — try to refresh
+  if (!refreshToken) return serverJwt;
+
+  try {
+    const resp = await axios.post(`${SERVER_URL}/auth/refresh`, { refreshToken });
+    const { accessToken, refreshToken: newRefreshToken } = resp.data;
+    if (accessToken) {
+      chrome.storage.local.set({
+        serverJwt: accessToken,
+        refreshToken: newRefreshToken || refreshToken,
+      });
+      return accessToken;
+    }
+  } catch {
+    // Refresh failed — return the existing token and let the server return 401
+  }
+  return serverJwt;
+}
+
 let automationRunning = false;
 let repliedTweetIds = new Set();
 
@@ -19,19 +66,27 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 const tonePromptMap = {
-  "Default": "Write a natural, concise reply as if you're responding to a friend's tweet. Don't sound robotic or overly formal.",
-  "Funny": "Write a witty and playful reply. Use harmless sarcasm, puns, or light humor. Keep it short and meme-like.",
-  "Sarcastic": "Reply with obvious exaggeration and dry wit. Your response should mock the tweet lightly without being mean. Keep it concise. Aim for 1-2 sentences.",
-  "Sincere": "Respond in a heartfelt and genuine way. Be kind, thoughtful, and human. No exaggerations or jokes. Keep it to 1-2 sentences.",
-  "One-liner": "Craft a punchy one-line reply that could go viral. Keep it under 15 words. No fluff.",
-  "Asking": "Turn your reply into a thoughtful question or follow-up. Make it sound curious and engaging. Limit to one short question.",
-  "Friendly": "Write a warm and casual reply like you're chatting with someone you like. Use emojis if natural. Keep it to a maximum of 2 sentences.",
-  "Thanking": "Compose a short and grateful reply. Be polite and appreciative, but avoid sounding overly formal. Ensure it's a single, very brief sentence."
+  Default:
+    "Write a natural, concise reply as if you're responding to a friend's tweet. Don't sound robotic or overly formal.",
+  Funny:
+    'Write a witty and playful reply. Use harmless sarcasm, puns, or light humor. Keep it short and meme-like.',
+  Sarcastic:
+    'Reply with obvious exaggeration and dry wit. Your response should mock the tweet lightly without being mean. Keep it concise. Aim for 1-2 sentences.',
+  Sincere:
+    'Respond in a heartfelt and genuine way. Be kind, thoughtful, and human. No exaggerations or jokes. Keep it to 1-2 sentences.',
+  'One-liner':
+    'Craft a punchy one-line reply that could go viral. Keep it under 15 words. No fluff.',
+  Asking:
+    'Turn your reply into a thoughtful question or follow-up. Make it sound curious and engaging. Limit to one short question.',
+  Friendly:
+    "Write a warm and casual reply like you're chatting with someone you like. Use emojis if natural. Keep it to a maximum of 2 sentences.",
+  Thanking:
+    "Compose a short and grateful reply. Be polite and appreciative, but avoid sounding overly formal. Ensure it's a single, very brief sentence.",
 };
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Received message:', request.action);
-  
+
   if (request.action === 'ping') {
     sendResponse({ success: true, timestamp: Date.now() });
     return true;
@@ -39,16 +94,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const selectedTone = request.tone || 'Default'; // Default to 'Default' if no tone is provided
     (async () => {
       try {
-        console.log('getReply called with tone:', selectedTone, 'tweetTextLength:', request.tweetText && request.tweetText.length, 'numImages:', request.images && request.images.length);
+        console.log(
+          'getReply called with tone:',
+          selectedTone,
+          'tweetTextLength:',
+          request.tweetText && request.tweetText.length,
+          'numImages:',
+          request.images && request.images.length
+        );
         // Always call the server generate endpoint first (server-side key pool manages limits)
         let reply = null;
         try {
-          const { serverJwt } = await new Promise((resolve) => chrome.storage.local.get(['serverJwt'], resolve));
+          const serverJwt = await getFreshToken();
           console.log('serverJwt present:', !!serverJwt);
           const headers = {};
           if (serverJwt) headers['Authorization'] = `Bearer ${serverJwt}`;
           console.log('Calling server generate endpoint:', `${SERVER_URL}/api/generate`);
-          const genResp = await axios.post(`${SERVER_URL}/api/generate`, { tweet_text: request.tweetText, images: request.images, tone: selectedTone }, { headers, withCredentials: true });
+          const genResp = await axios.post(
+            `${SERVER_URL}/api/generate`,
+            { tweet_text: request.tweetText, images: request.images, tone: selectedTone },
+            { headers, withCredentials: true }
+          );
           console.log('Server generate status:', genResp && genResp.status);
           console.log('Server generate response data:', genResp && genResp.data);
           if (genResp && genResp.status >= 200 && genResp.status < 300) {
@@ -104,7 +170,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ replied: repliedTweetIds.has(request.tweetId) });
     return true;
   }
-  
+
   // Default response for unhandled actions
   sendResponse({ error: 'Unknown action' });
 });

@@ -474,9 +474,19 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
                 if (replyResponse && replyResponse.reply) {
                   console.log('Generated reply received:', replyResponse.reply);
 
-                  // Copy the reply to clipboard
-                  await navigator.clipboard.writeText(replyResponse.reply);
-                  console.log('Reply copied to clipboard.');
+                  // Copy the reply to clipboard (with execCommand fallback for unfocused document)
+                  try {
+                    await navigator.clipboard.writeText(replyResponse.reply);
+                  } catch (_clipboardErr) {
+                    const ta = document.createElement('textarea');
+                    ta.value = replyResponse.reply;
+                    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                  }
 
                   // Show toast message instead of alert
                   showToast(
