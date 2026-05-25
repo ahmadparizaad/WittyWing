@@ -124,10 +124,43 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           }
         } catch (err) {
           console.warn('Server generate failed, error:', err && (err.message || err.toString()));
-          console.warn('Full error object:', err);
+          const status = err && err.response && err.response.status;
+          const serverMsg =
+            (err && err.response && err.response.data && err.response.data.message) ||
+            (err && err.response && err.response.data && err.response.data.error);
+
+          if (status === 401) {
+            // Session expired — tell the user to sign in again; do NOT fall back to templates
+            sendResponse({
+              error: 'SESSION_EXPIRED',
+              message:
+                'Your session has expired. Please open the WittyWing extension and sign in again.',
+              tweetId: request.tweetId,
+            });
+            return;
+          } else if (status === 402 || status === 403) {
+            // Credits exhausted or plan limit hit
+            sendResponse({
+              error: 'CREDITS_EXPIRED',
+              message:
+                serverMsg || "You've run out of credits. Please top up to keep generating replies.",
+              tweetId: request.tweetId,
+            });
+            return;
+          } else if (status >= 400) {
+            // Other 4xx/5xx — surface the server message rather than silently falling back
+            sendResponse({
+              error: 'SERVER_ERROR',
+              message:
+                serverMsg || 'Something went wrong on the server. Please try again in a moment.',
+              tweetId: request.tweetId,
+            });
+            return;
+          }
+          // Network / unknown error — fall through to template fallback below
         }
 
-        // Fallback deterministic reply (simple templates) if server failed
+        // Fallback deterministic reply (simple templates) only for network/unknown errors
         if (!reply) {
           const toneKey = selectedTone || 'Default';
           switch (toneKey) {

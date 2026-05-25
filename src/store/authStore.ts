@@ -6,9 +6,11 @@ import type { AuthState, SessionResponse } from '../types';
 
 interface AuthStore extends AuthState {
   refreshToken: string | null;
+  sessionExpiredMessage: string | null;
   checkSession: () => Promise<void>;
   signIn: () => void;
-  signOut: () => Promise<void>;
+  signOut: (reason?: string) => Promise<void>;
+  clearSessionExpiredMessage: () => void;
   setTokens: (accessToken: string, refreshToken: string) => void;
   refreshAccessToken: () => Promise<boolean>;
 }
@@ -65,12 +67,12 @@ axios.interceptors.response.use(
         return axios(originalRequest);
       } else {
         isRefreshing = false;
-        await store.signOut();
+        await store.signOut('Your session has expired. Please sign in again.');
         return Promise.reject(error);
       }
     } catch (err) {
       isRefreshing = false;
-      await useAuthStore.getState().signOut();
+      await useAuthStore.getState().signOut('Your session has expired. Please sign in again.');
       return Promise.reject(err);
     }
   }
@@ -82,6 +84,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   isLoading: true,
   serverJwt: null,
   refreshToken: null,
+  sessionExpiredMessage: null,
 
   checkSession: async () => {
     set({ isLoading: true });
@@ -157,7 +160,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }, 1000);
   },
 
-  signOut: async () => {
+  signOut: async (reason?: string) => {
     if (proactiveRefreshTimer) {
       clearTimeout(proactiveRefreshTimer);
       proactiveRefreshTimer = null;
@@ -169,7 +172,17 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       console.error('Sign out request failed:', err);
     }
     chrome.storage.local.remove(['serverJwt', 'refreshToken']);
-    set({ user: null, isAuthenticated: false, serverJwt: null, refreshToken: null });
+    set({
+      user: null,
+      isAuthenticated: false,
+      serverJwt: null,
+      refreshToken: null,
+      sessionExpiredMessage: reason ?? null,
+    });
+  },
+
+  clearSessionExpiredMessage: () => {
+    set({ sessionExpiredMessage: null });
   },
 
   setTokens: (accessToken: string, refreshToken: string) => {
@@ -225,7 +238,13 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     } catch (err) {
       console.error('Token refresh failed:', err);
       chrome.storage.local.remove(['serverJwt', 'refreshToken']);
-      set({ serverJwt: null, refreshToken: null, isAuthenticated: false, user: null });
+      set({
+        serverJwt: null,
+        refreshToken: null,
+        isAuthenticated: false,
+        user: null,
+        sessionExpiredMessage: 'Your session has expired. Please sign in again.',
+      });
       return false;
     }
   },

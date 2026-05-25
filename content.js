@@ -493,9 +493,33 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
                     'Reply generated and copied to clipboard! Please paste it (Ctrl+V/Cmd+V) and click "Reply".'
                   );
                 } else if (replyResponse && replyResponse.error) {
-                  console.error('Error generating reply:', replyResponse.error);
-                  // Server-side error: show a generic notice to the user
-                  alert(`Error generating reply: ${replyResponse.error}`);
+                  console.error(
+                    'Error generating reply:',
+                    replyResponse.error,
+                    replyResponse.message
+                  );
+                  if (replyResponse.error === 'SESSION_EXPIRED') {
+                    showToast(
+                      '🔒 ' +
+                        (replyResponse.message ||
+                          'Session expired. Please sign in again via the WittyWing extension.'),
+                      8000,
+                      'error'
+                    );
+                  } else if (replyResponse.error === 'CREDITS_EXPIRED') {
+                    showToast(
+                      '💳 ' +
+                        (replyResponse.message || 'Credits exhausted. Please top up to continue.'),
+                      8000,
+                      'error'
+                    );
+                  } else {
+                    showToast(
+                      '⚠️ ' + (replyResponse.message || replyResponse.error),
+                      6000,
+                      'error'
+                    );
+                  }
                 }
               } catch (error) {
                 console.error('Extension context error:', error);
@@ -503,16 +527,22 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
                   error.message.includes('Extension context invalidated') ||
                   error.message.includes('Could not establish connection')
                 ) {
-                  alert('Extension context lost. Please refresh the page and try again.');
+                  showToast(
+                    '⚠️ Extension context lost. Please refresh the page and try again.',
+                    7000,
+                    'error'
+                  );
                 } else {
-                  alert(
-                    `Communication error: ${error.message}\n\nPlease refresh the page and try again.`
+                  showToast(
+                    `⚠️ Communication error: ${error.message}. Please refresh and try again.`,
+                    7000,
+                    'error'
                   );
                 }
               }
             } else {
               console.error('Could not extract tweet text.');
-              alert('Could not extract tweet text to generate a reply.');
+              showToast('⚠️ Could not read the tweet text. Please try again.', 6000, 'error');
             }
           } finally {
             // Re-enable button
@@ -595,35 +625,46 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
   }
 
   // Helper function to show a toast message
-  function showToast(message, duration = 5000) {
+  // type: 'success' (blue) | 'error' (red) | 'warning' (amber)
+  function showToast(message, duration = 5000, type = 'success') {
     const toastId = 'twitter-automation-toast';
-    let toastElement = document.getElementById(toastId);
+    // Remove any existing toast immediately so rapid calls don't stack
+    const existing = document.getElementById(toastId);
+    if (existing) existing.remove();
 
-    if (!toastElement) {
-      toastElement = document.createElement('div');
-      toastElement.id = toastId;
-      toastElement.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background-color: rgba(29, 161, 242, 0.9); /* Twitter blue with transparency */
-        color: white;
-        padding: 10px 20px;
-        border-radius: 8px;
-        font-size: 14px;
-        z-index: 10000; /* Ensure it's on top */
-        opacity: 0;
-        transition: opacity 0.5s ease-in-out;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        text-align: center;
-        max-width: 80%;
-      `;
-      document.body.appendChild(toastElement);
-    }
+    const bgColor =
+      type === 'error'
+        ? 'rgba(220, 38, 38, 0.92)' /* red-600 */
+        : type === 'warning'
+          ? 'rgba(217, 119, 6, 0.92)' /* amber-600 */
+          : 'rgba(29, 161, 242, 0.9)'; /* Twitter blue */
 
+    const toastElement = document.createElement('div');
+    toastElement.id = toastId;
+    toastElement.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: ${bgColor};
+      color: white;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      z-index: 10000;
+      opacity: 0;
+      transition: opacity 0.3s ease-in-out;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+      text-align: center;
+      max-width: 80%;
+    `;
     toastElement.textContent = message;
-    toastElement.style.opacity = '1';
+    document.body.appendChild(toastElement);
+
+    // Trigger fade-in on next frame
+    requestAnimationFrame(() => {
+      toastElement.style.opacity = '1';
+    });
 
     setTimeout(() => {
       toastElement.style.opacity = '0';
@@ -631,7 +672,7 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
         if (toastElement.parentNode) {
           toastElement.parentNode.removeChild(toastElement);
         }
-      }, 500); // Wait for fade-out transition to complete
+      }, 350);
     }, duration);
   }
 

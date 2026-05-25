@@ -4,7 +4,14 @@ import { useAuthStore } from './store';
 import type { Page } from './types';
 
 export default function App() {
-  const { isAuthenticated, isLoading, checkSession, setTokens } = useAuthStore();
+  const {
+    isAuthenticated,
+    isLoading,
+    checkSession,
+    setTokens,
+    sessionExpiredMessage,
+    clearSessionExpiredMessage,
+  } = useAuthStore();
   const [currentPage, setCurrentPage] = useState<Page>('auth');
   const [statusMessage, setStatusMessage] = useState<{
     text: string;
@@ -24,6 +31,15 @@ export default function App() {
       setCurrentPage('auth');
     }
   }, [isAuthenticated, isLoading]);
+
+  // Show a status message whenever the store flags a session expiry
+  useEffect(() => {
+    if (sessionExpiredMessage) {
+      handleStatusMessage(sessionExpiredMessage, 'error');
+      clearSessionExpiredMessage();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionExpiredMessage]);
 
   // Listen for auth message from popup window (OAuth callback page posts a message)
   useEffect(() => {
