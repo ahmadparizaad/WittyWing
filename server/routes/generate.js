@@ -554,42 +554,8 @@ async function callOpenRouter(promptInput, options = {}) {
       openrouterError = e.message || e;
     }
 
-    // If we attempted upstream services but none produced a usable reply, return 502 with diagnostics
-    if ((geminiAttempted || openRouterAttempted)) {
-      return res.status(502).json({ error: 'Upstream generation failed', details: { geminiAttempted, openRouterAttempted, geminiError, openrouterError } });
-    }
-
-    // Fallback deterministic reply (both upstream providers failed)
-    let reply = '';
-    const firstProject = (usageDoc && Array.isArray(usageDoc.projects) && usageDoc.projects.length > 0) ? usageDoc.projects[0] : null;
-    const firstProjectName = firstProject && (firstProject.name || '').trim();
-    switch (toneKey) {
-      case 'Funny':
-        reply = `😂 ${usageDoc?.displayName || 'I'} would say: "That's hilarious!"`;
-        break;
-      case 'Sarcastic':
-        reply = `Sure, because that's exactly what we needed today.`;
-        break;
-      case 'Sincere':
-        reply = `That's really thoughtful; I appreciate you sharing this.`;
-        break;
-      case 'One-liner':
-        reply = firstProjectName ? `${firstProjectName} — wow. Nailed it.` : `Wow. Nailed it.`;
-        break;
-      case 'Asking':
-        reply = `Curious—how did you come up with this?`;
-        break;
-      case 'Friendly':
-        reply = firstProjectName ? `Love this! Best of luck with ${firstProjectName} — hope you're doing well 😊` : `Love this! Hope you're doing well 😊`;
-        break;
-      case 'Thanking':
-        reply = firstProjectName ? `Thanks — ${firstProjectName} really appreciates this!` : `Thanks so much—really appreciate it!`;
-        break;
-      default:
-        reply = `Nice! Thanks for sharing.`;
-    }
-
-    return res.json({ reply });
+    // Both upstream providers attempted but failed — return 502 with diagnostics
+    return res.status(502).json({ error: 'Upstream generation failed', details: { geminiAttempted, openRouterAttempted, geminiError, openrouterError } });
   } catch (err) {
     console.error('Error generating reply:', err);
     res.status(500).json({ error: 'Generation failed', details: err.message });

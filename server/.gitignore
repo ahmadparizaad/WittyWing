@@ -29,6 +29,7 @@ logs/
 
 # Environment variables
 .env
+.env.*
 
 # Editor directories and files
 .idea/

@@ -157,39 +157,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             });
             return;
           }
-          // Network / unknown error — fall through to template fallback below
+          // Network / unknown error — surface it to the user
+          sendResponse({
+            error: 'NETWORK_ERROR',
+            message: 'Could not reach the server. Please check your connection and try again.',
+            tweetId: request.tweetId,
+          });
+          return;
         }
 
-        // Fallback deterministic reply (simple templates) only for network/unknown errors
-        if (!reply) {
-          const toneKey = selectedTone || 'Default';
-          switch (toneKey) {
-            case 'Funny':
-              reply = `😂 That got me laughing — love it!`;
-              break;
-            case 'Sarcastic':
-              reply = `Right, because that's not suspicious at all.`;
-              break;
-            case 'Sincere':
-              reply = `This is lovely — thank you for sharing.`;
-              break;
-            case 'One-liner':
-              reply = `Well played.`;
-              break;
-            case 'Asking':
-              reply = `How did you even come up with this?`;
-              break;
-            case 'Friendly':
-              reply = `Love it — hope you're doing awesome! 😊`;
-              break;
-            case 'Thanking':
-              reply = `Thanks — really appreciate it!`;
-              break;
-            default:
-              reply = `Nice! Thanks for sharing.`;
-          }
+        if (reply) {
+          sendResponse({ reply: reply, tweetId: request.tweetId });
+        } else {
+          sendResponse({
+            error: 'NO_REPLY',
+            message: 'No reply was generated. Please try again.',
+            tweetId: request.tweetId,
+          });
         }
-        sendResponse({ reply: reply, tweetId: request.tweetId });
       } catch (error) {
         console.error('Error generating reply:', error);
         sendResponse({ error: error.message, tweetId: request.tweetId });
