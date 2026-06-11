@@ -1,0 +1,57 @@
+[
+  {
+    "id": "seed-2026-06-12-launch-thread",
+    "text": [
+      "unpopular opinion: your posts aren't growing your X account. your replies are.",
+      "small account math: your post reaches your 300 followers. your reply on a 100k account's post reaches theirs. replies are the only free distribution you have.",
+      "the problem isn't knowing this. it's writing the 15th good reply of the day. that's where everyone quits.",
+      "so i built a chrome extension that drafts the reply inside X's reply box. pick a tone — funny, sarcastic, sincere, one-liner — one click, done.",
+      "it's called WittyWing. free for 3 days, 10 replies/day, no card needed.\n\nhttps://chromewebstore.google.com/detail/wittywing/nanmlpbedgfahicpngbhalhjokieoipa"
+    ],
+    "scheduled_at": "2026-06-12T09:30:00+05:30",
+    "posted_at": null,
+    "source": "seed"
+  },
+  {
+    "id": "seed-2026-06-13-onboarding",
+    "text": "deleted the api key setup screen from my extension. activation doubled.\n\nevery onboarding step you remove is worth more than any feature you add.",
+    "scheduled_at": "2026-06-13T09:48:00+05:30",
+    "posted_at": null,
+    "source": "seed"
+  },
+  {
+    "id": "seed-2026-06-14-product",
+    "text": "8 tones. 1 click. 0 dashboards.\n\nthe whole product lives inside X's reply box. no separate app, no copy-pasting between tabs.",
+    "scheduled_at": "2026-06-14T10:12:00+05:30",
+    "posted_at": null,
+    "source": "seed"
+  },
+  {
+    "id": "seed-2026-06-15-consistency",
+    "text": "consistency beats brilliance on X.\n\none great reply does nothing. twenty decent replies a day, every day, compounds into an audience.",
+    "scheduled_at": "2026-06-15T09:35:00+05:30",
+    "posted_at": null,
+    "source": "seed"
+  },
+  {
+    "id": "seed-2026-06-16-pricing",
+    "text": "credits that never expire shouldn't be a differentiator.\n\nyet here we are.",
+    "scheduled_at": "2026-06-16T10:05:00+05:30",
+    "posted_at": null,
+    "source": "seed"
+  },
+  {
+    "id": "seed-2026-06-17-mv3",
+    "text": "manifest v3 service workers die silently. if your extension's background script 'randomly stops working', it isn't random. design for it being killed at any moment.",
+    "scheduled_at": "2026-06-17T09:42:00+05:30",
+    "posted_at": null,
+    "source": "seed"
+  },
+  {
+    "id": "seed-2026-06-18-25-seconds",
+    "text": "the difference between 'i should reply more' and actually doing it is about 25 seconds per reply.\n\ni built WittyWing to delete those 25 seconds. link in bio.",
+    "scheduled_at": "2026-06-18T10:20:00+05:30",
+    "posted_at": null,
+    "source": "seed"
+  }
+]

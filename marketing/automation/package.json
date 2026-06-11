@@ -1,0 +1,9 @@
+{
+  "name": "wittywing-organic-automation",
+  "private": true,
+  "type": "module",
+  "description": "Cron-driven X poster (browser session) + weekly tweet generation via Claude CLI",
+  "dependencies": {
+    "playwright": "^1.50.0"
+  }
+}
