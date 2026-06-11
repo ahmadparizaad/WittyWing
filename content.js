@@ -492,6 +492,11 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
                   showToast(
                     'Reply generated and copied to clipboard! Please paste it (Ctrl+V/Cmd+V) and click "Reply".'
                   );
+
+                  // One-time review ask (5th successful reply) — wait for the success toast to clear
+                  if (replyResponse.showReviewPrompt) {
+                    setTimeout(() => showReviewPrompt(), 6500);
+                  }
                 } else if (replyResponse && replyResponse.error) {
                   console.error(
                     'Error generating reply:',
@@ -674,6 +679,92 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
         }
       }, 350);
     }, duration);
+  }
+
+  // One-time review prompt shown after the 5th successful reply (background.js gates it)
+  function showReviewPrompt() {
+    const promptId = 'wittywing-review-prompt';
+    if (document.getElementById(promptId)) return;
+
+    const REVIEW_URL =
+      'https://chromewebstore.google.com/detail/wittywing/nanmlpbedgfahicpngbhalhjokieoipa/reviews';
+
+    const card = document.createElement('div');
+    card.id = promptId;
+    card.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #15202B;
+      color: white;
+      padding: 14px 16px;
+      border: 1px solid #38444D;
+      border-radius: 12px;
+      font-size: 14px;
+      z-index: 10000;
+      opacity: 0;
+      transition: opacity 0.3s ease-in-out;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      max-width: 300px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    `;
+
+    const message = document.createElement('div');
+    message.textContent =
+      "That's 5 replies with WittyWing! 🎉 If it's saving you time, a quick rating helps others find it.";
+
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display: flex; gap: 8px; justify-content: flex-end;';
+
+    const rateLink = document.createElement('a');
+    rateLink.href = REVIEW_URL;
+    rateLink.target = '_blank';
+    rateLink.rel = 'noopener noreferrer';
+    rateLink.textContent = 'Rate WittyWing ⭐';
+    rateLink.style.cssText = `
+      background-color: #1DA1F2;
+      color: white;
+      border-radius: 9999px;
+      padding: 6px 14px;
+      font-weight: bold;
+      font-size: 13px;
+      text-decoration: none;
+    `;
+    rateLink.addEventListener('click', () => dismiss());
+
+    const dismissButton = document.createElement('button');
+    dismissButton.textContent = 'Not now';
+    dismissButton.style.cssText = `
+      background: none;
+      color: #8899A6;
+      border: none;
+      padding: 6px 10px;
+      font-size: 13px;
+      cursor: pointer;
+    `;
+    dismissButton.addEventListener('click', () => dismiss());
+
+    function dismiss() {
+      card.style.opacity = '0';
+      setTimeout(() => card.remove(), 350);
+    }
+
+    actions.appendChild(dismissButton);
+    actions.appendChild(rateLink);
+    card.appendChild(message);
+    card.appendChild(actions);
+    document.body.appendChild(card);
+
+    requestAnimationFrame(() => {
+      card.style.opacity = '1';
+    });
+
+    // Auto-dismiss after 30s if ignored
+    setTimeout(() => {
+      if (card.isConnected) dismiss();
+    }, 30000);
   }
 
   // Observe the DOM for changes to detect when reply dialogs appear

@@ -167,7 +167,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
 
         if (reply) {
-          sendResponse({ reply: reply, tweetId: request.tweetId });
+          // Review flywheel: ask for a store rating exactly once, on the 5th successful reply
+          let showReviewPrompt = false;
+          try {
+            const stored = await new Promise((resolve) =>
+              chrome.storage.local.get(['successfulReplyCount', 'reviewPromptDone'], resolve)
+            );
+            const count = (stored.successfulReplyCount || 0) + 1;
+            chrome.storage.local.set({ successfulReplyCount: count });
+            if (count >= 5 && !stored.reviewPromptDone) {
+              showReviewPrompt = true;
+              chrome.storage.local.set({ reviewPromptDone: true });
+            }
+          } catch (counterErr) {
+            console.warn('Review prompt counter error:', counterErr);
+          }
+          sendResponse({ reply: reply, tweetId: request.tweetId, showReviewPrompt });
         } else {
           sendResponse({
             error: 'NO_REPLY',

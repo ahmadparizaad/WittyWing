@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "WittyWing",
-  "version": "1.3.1",
-  "description": "Reply smarter, grow faster. Stay consistent on X with AI replies that sound like you — never miss a chance to engage.",
+  "name": "WittyWing — AI Reply Generator for X (Twitter)",
+  "version": "1.3.2",
+  "description": "AI reply generator for X (Twitter). One-click, tone-matched replies that sound like you. Grow faster, reply in seconds.",
   "permissions": [
     "activeTab",
     "scripting",

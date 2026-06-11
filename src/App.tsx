@@ -135,7 +135,9 @@ export default function App() {
           </div>
         )}
 
-        <div className="text-center mt-2.5 text-[11px] text-muted">v1.3 • WittyWing</div>
+        <div className="text-center mt-2.5 text-[11px] text-muted">
+          v{chrome.runtime.getManifest().version} • WittyWing
+        </div>
       </div>
     </div>
   );
