@@ -107,6 +107,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         try {
           const serverJwt = await getFreshToken();
           console.log('serverJwt present:', !!serverJwt);
+
+          if (!serverJwt) {
+            sendResponse({
+              error: 'NOT_LOGGED_IN',
+              message: 'Please sign in to WittyWing extension to generate replies.',
+              tweetId: request.tweetId,
+            });
+            return;
+          }
+
           const headers = {};
           if (serverJwt) headers['Authorization'] = `Bearer ${serverJwt}`;
           console.log('Calling server generate endpoint:', `${SERVER_URL}/api/generate`);
