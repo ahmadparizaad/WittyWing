@@ -89,6 +89,67 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
     });
   }
 
+  // X's reply composer is a Draft.js contenteditable: text must go through editing
+  // commands or a paste event (direct DOM writes are ignored), and Draft.js re-renders
+  // asynchronously — it may even replace the editor node — so always re-query before
+  // reading content back.
+  function findReplyComposer() {
+    const dialog = document.querySelector('[role="dialog"]');
+    return (
+      (dialog && dialog.querySelector('[data-testid="tweetTextarea_0"]')) ||
+      document.querySelector('[data-testid="tweetTextarea_0"]')
+    );
+  }
+
+  // Insert generated text directly into the reply composer.
+  // Returns true if the text ended up in the composer, false otherwise.
+  async function insertReplyIntoComposer(replyText) {
+    const editor = findReplyComposer();
+    if (!editor) {
+      console.warn('Reply composer not found for direct insertion.');
+      return false;
+    }
+
+    const probe = replyText.slice(0, 20).replace(/\s+/g, ' ');
+    const composerHasText = () => {
+      const node = findReplyComposer();
+      return !!node && (node.textContent || '').replace(/\s+/g, ' ').includes(probe);
+    };
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 150));
+
+    try {
+      editor.focus();
+      // Replace any existing draft so regenerating doesn't append to the previous reply
+      document.execCommand('selectAll', false, null);
+      document.execCommand('delete', false, null);
+      document.execCommand('insertText', false, replyText);
+
+      await settle();
+      if (composerHasText()) {
+        return true;
+      }
+
+      // Fallback: a synthetic paste event, which Draft.js also handles. Clear the
+      // composer again first so this path can never stack on a successful insertText
+      // whose render we failed to detect.
+      const target = findReplyComposer() || editor;
+      target.focus();
+      document.execCommand('selectAll', false, null);
+      document.execCommand('delete', false, null);
+      const dt = new DataTransfer();
+      dt.setData('text/plain', replyText);
+      target.dispatchEvent(
+        new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })
+      );
+
+      await settle();
+      return composerHasText();
+    } catch (e) {
+      console.warn('Direct insertion into composer failed:', e);
+      return false;
+    }
+  }
+
   // Listen for messages from background.js (currently empty, but might be used in the future)
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // This listener can be used for future communication from background.js if needed.
@@ -474,24 +535,29 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
                 if (replyResponse && replyResponse.reply) {
                   console.log('Generated reply received:', replyResponse.reply);
 
-                  // Copy the reply to clipboard (with execCommand fallback for unfocused document)
-                  try {
-                    await navigator.clipboard.writeText(replyResponse.reply);
-                  } catch (_clipboardErr) {
-                    const ta = document.createElement('textarea');
-                    ta.value = replyResponse.reply;
-                    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
-                    document.body.appendChild(ta);
-                    ta.focus();
-                    ta.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(ta);
-                  }
+                  // Insert the reply directly into the composer; fall back to
+                  // clipboard copy only if insertion fails (e.g., composer re-rendered away)
+                  const inserted = await insertReplyIntoComposer(replyResponse.reply);
 
-                  // Show toast message instead of alert
-                  showToast(
-                    'Reply generated and copied to clipboard! Please paste it (Ctrl+V/Cmd+V) and click "Reply".'
-                  );
+                  if (inserted) {
+                    showToast('Reply inserted! Review it and click "Reply" to post.');
+                  } else {
+                    try {
+                      await navigator.clipboard.writeText(replyResponse.reply);
+                    } catch (_clipboardErr) {
+                      const ta = document.createElement('textarea');
+                      ta.value = replyResponse.reply;
+                      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+                      document.body.appendChild(ta);
+                      ta.focus();
+                      ta.select();
+                      document.execCommand('copy');
+                      document.body.removeChild(ta);
+                    }
+                    showToast(
+                      'Reply generated and copied to clipboard! Please paste it (Ctrl+V/Cmd+V) and click "Reply".'
+                    );
+                  }
 
                   // One-time review ask (5th successful reply) — wait for the success toast to clear
                   if (replyResponse.showReviewPrompt) {

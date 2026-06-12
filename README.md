@@ -8,7 +8,7 @@ Automate your Twitter (X) replies with AI-powered, tone-customized responses usi
 
 - **AI-Powered Replies:** Generate natural, funny, sarcastic, sincere, or viral one-liner replies using Google Gemini.
 - **Tone Selection:** Choose from multiple tones for each reply (Default, Funny, Sarcastic, Sincere, One-liner, Asking, Friendly, Thanking).
-- **Clipboard Integration:** Replies are automatically copied to your clipboard for quick posting.
+- **Direct Reply Insertion:** Generated replies are inserted straight into X's reply box — no copy-paste needed (clipboard copy remains as a fallback).
 - **Seamless Twitter Integration:** Works on both x.com and twitter.com.
 * **Server-managed API Keys:** The extension no longer requires a local Gemini API key — the backend manages a pool of keys and rotates on quota limits.
 - **Robust Error Handling:** Handles API errors, rate limits, and Chrome extension context issues gracefully.
@@ -108,7 +108,7 @@ npm run format
 2. **Select Tone & Generate:**
    - Choose your desired tone.
    - Click "Generate Reply".
-   - The AI-generated reply is copied to your clipboard—just paste and send!
+   - The AI-generated reply appears directly in the reply box—review and send!
 
 ---
 
