@@ -128,7 +128,7 @@ function makePrompt(user, tweet_text, tone, images = []) {
     bioPart ? `Bio: ${bioPart}` : null,
     projectPart ? projectPart : null,
     ``,
-    `Write a single reply (max 280 chars) that matches the tone and reflects the user's voice and background. Output only the reply text — no labels, no quotes, no explanation.`,
+    `Write a single short reply that matches the tone and reflects the user's voice and background. Keep it under 200 characters — be punchy and direct, not verbose. Output only the reply text — no labels, no quotes, no explanation. NEVER use em dashes (— or –). NEVER use bullet points or lists.`,
   ].filter(v => v !== null).join('\n');
 
   // User message: just the tweet
@@ -295,7 +295,7 @@ router.post('/', async (req, res) => {
 
             const geminiBody = {
               contents: [{ parts: parts }],
-              generationConfig: { maxOutputTokens: 150, temperature: 0.7 }
+              generationConfig: { maxOutputTokens: 80, temperature: 0.7 }
             };
             if (sysMsg) geminiBody.systemInstruction = { parts: [{ text: sysMsg }] };
 
@@ -432,7 +432,7 @@ async function callOpenRouter(promptInput, options = {}) {
           model: modelName,
           messages: messages,
           temperature: 0.7,
-          max_tokens: 300,
+          max_tokens: 100,
           reasoning: { enabled: false }
         }, {
           headers: {
@@ -520,6 +520,16 @@ async function callOpenRouter(promptInput, options = {}) {
       });
     }
 
+    function sanitizeReply(text) {
+      return text
+        .replace(/(\d)\s*[—–]\s*(\d)/g, '$1-$2') // numeric ranges: 9–5 -> 9-5
+        .replace(/\s*[—–]\s*/g, ', ') // prose em/en dashes read naturally as a comma
+        .replace(/,\s*,+/g, ',') // collapse doubled commas if the model already had one
+        .replace(/  +/g, ' ')
+        .replace(/^[,\s]+/, '')
+        .trim();
+    }
+
     let geminiAttempted = false;
     let openRouterAttempted = false;
     let geminiError = null;
@@ -533,7 +543,7 @@ async function callOpenRouter(promptInput, options = {}) {
         const geminiResp = await callGeminiModelPool(userMessage, images, systemMessage);
         if (geminiResp && geminiResp.text) {
           await consumeUsage(usageDoc, reason);
-          return res.json({ reply: geminiResp.text, model: geminiResp.model });
+          return res.json({ reply: sanitizeReply(geminiResp.text), model: geminiResp.model });
         }
         geminiError = geminiResp;
       } catch (e) {
@@ -547,7 +557,7 @@ async function callOpenRouter(promptInput, options = {}) {
       const orResp = await callOpenRouter(userMessage, { structured: true, tone: toneKey, images, systemMessage, userMessage });
       if (orResp && orResp.text) {
         await consumeUsage(usageDoc, reason);
-        return res.json({ reply: orResp.text, model: orResp.model });
+        return res.json({ reply: sanitizeReply(orResp.text), model: orResp.model });
       }
       openrouterError = orResp || 'no-response';
     } catch (e) {
