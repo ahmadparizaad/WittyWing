@@ -87,6 +87,13 @@ export function ProfileView({ onNavigate, onStatusMessage }: ProfileViewProps) {
       </div>
 
       <div className="my-2">
+        <div className="font-bold text-[13px]">Auto-generate replies</div>
+        <div className="text-muted text-[13px]">
+          {isLoading ? 'Syncing...' : (profile?.autoGenerate ? 'Enabled' : 'Disabled')}
+        </div>
+      </div>
+
+      <div className="my-2">
         <div className="font-bold text-[13px]">Projects</div>
         <div className="text-muted text-[13px]">{renderProjects()}</div>
       </div>

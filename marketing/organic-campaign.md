@@ -31,9 +31,11 @@ Every post ends with the Chrome Web Store link and a small, specific CTA.
 
 The X API is pay-as-you-go with no free tier (2026; $0.015/tweet, $0.20 with
 URL — Zernio passes it through at 0% markup). To keep the campaign at $0,
-this track runs via `marketing/automation/`: a cron job drives a logged-in
-Brave profile to post 1 tweet/day from `queue.json`, and a weekly
-`claude -p` job refills the queue. ⚠️ This bypasses X's automation rules
+this track runs via `marketing/automation/`: a weekly launchd job refills
+`queue.json` via `claude -p`, then hands the week's tweets to X's native
+scheduler through a logged-in Brave profile — X posts them on time even with
+the Mac asleep. A daily fallback job live-posts anything that couldn't be
+scheduled (threads, failures). ⚠️ This bypasses X's automation rules
 (API required for automated posting) — accepted risk, volume kept at
 1/day with jitter. Paid fallback: connect X to Zernio (swap out Instagram)
 and pay per call.

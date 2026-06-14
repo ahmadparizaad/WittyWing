@@ -9,7 +9,7 @@
       "it's called WittyWing. free for 3 days, 10 replies/day, no card needed.\n\nhttps://chromewebstore.google.com/detail/wittywing/nanmlpbedgfahicpngbhalhjokieoipa"
     ],
     "scheduled_at": "2026-06-12T09:30:00+05:30",
-    "posted_at": null,
+    "posted_at": "2026-06-14T05:35:31.117Z",
     "source": "seed"
   },
   {
@@ -17,41 +17,53 @@
     "text": "deleted the api key setup screen from my extension. activation doubled.\n\nevery onboarding step you remove is worth more than any feature you add.",
     "scheduled_at": "2026-06-13T09:48:00+05:30",
     "posted_at": null,
-    "source": "seed"
+    "source": "seed",
+    "scheduled_on_x_at": "2026-06-12T06:25:20.637Z",
+    "scheduled_for": "2026-06-13T04:18:00.000Z"
   },
   {
     "id": "seed-2026-06-14-product",
     "text": "8 tones. 1 click. 0 dashboards.\n\nthe whole product lives inside X's reply box. no separate app, no copy-pasting between tabs.",
     "scheduled_at": "2026-06-14T10:12:00+05:30",
     "posted_at": null,
-    "source": "seed"
+    "source": "seed",
+    "scheduled_on_x_at": "2026-06-12T06:26:10.620Z",
+    "scheduled_for": "2026-06-14T04:42:00.000Z"
   },
   {
     "id": "seed-2026-06-15-consistency",
     "text": "consistency beats brilliance on X.\n\none great reply does nothing. twenty decent replies a day, every day, compounds into an audience.",
     "scheduled_at": "2026-06-15T09:35:00+05:30",
     "posted_at": null,
-    "source": "seed"
+    "source": "seed",
+    "scheduled_on_x_at": "2026-06-12T06:26:57.799Z",
+    "scheduled_for": "2026-06-15T04:05:00.000Z"
   },
   {
     "id": "seed-2026-06-16-pricing",
     "text": "credits that never expire shouldn't be a differentiator.\n\nyet here we are.",
     "scheduled_at": "2026-06-16T10:05:00+05:30",
     "posted_at": null,
-    "source": "seed"
+    "source": "seed",
+    "scheduled_on_x_at": "2026-06-12T06:27:47.189Z",
+    "scheduled_for": "2026-06-16T04:35:00.000Z"
   },
   {
     "id": "seed-2026-06-17-mv3",
     "text": "manifest v3 service workers die silently. if your extension's background script 'randomly stops working', it isn't random. design for it being killed at any moment.",
     "scheduled_at": "2026-06-17T09:42:00+05:30",
     "posted_at": null,
-    "source": "seed"
+    "source": "seed",
+    "scheduled_on_x_at": "2026-06-12T06:28:25.292Z",
+    "scheduled_for": "2026-06-17T04:12:00.000Z"
   },
   {
     "id": "seed-2026-06-18-25-seconds",
     "text": "the difference between 'i should reply more' and actually doing it is about 25 seconds per reply.\n\ni built WittyWing to delete those 25 seconds. link in bio.",
     "scheduled_at": "2026-06-18T10:20:00+05:30",
     "posted_at": null,
-    "source": "seed"
+    "source": "seed",
+    "scheduled_on_x_at": "2026-06-12T06:29:16.756Z",
+    "scheduled_for": "2026-06-18T04:50:00.000Z"
   }
 ]

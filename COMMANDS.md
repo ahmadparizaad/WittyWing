@@ -57,8 +57,8 @@ npm run build:prod
 # Dev build (for testing without minification)
 npm run build:dev
 
-# Zip the dist folder for Chrome Web Store upload
-zip -r WittyWing-v1.x.zip dist/
+# Zip the contents of dist/ for Chrome Web Store (manifest.json must be at root)
+cd dist && zip -r ../WittyWing-v1.3.2.zip * && cd ..
 ```
 
 ---

@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="description" content="WittyWing — smart reply suggestions for X (Twitter). Generate funny, sarcastic, sincere, or viral replies in one click." />
-  <meta property="og:title" content="WittyWing — Reply Smarter on X" />
-  <meta property="og:description" content="Tone-matched reply suggestions for X. One click. Your voice. Always witty." />
-  <title>WittyWing - Reply Smarter on X</title>
+  <meta name="description" content="WittyWing — AI-powered engagement assistant for X (Twitter). Generate authentic, engaging replies in seconds. Stay consistent, grow your audience, and never run out of things to say." />
+  <meta property="og:title" content="WittyWing — Turn Every Tweet Into a Conversation" />
+  <meta property="og:description" content="AI-powered engagement assistant for X. Generate authentic replies. Stay consistent. Grow faster." />
+  <title>WittyWing — AI-Powered Engagement Assistant for X</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -220,6 +220,24 @@
     .btn-primary:hover { background: var(--gold); color: var(--ink); transform: translateY(-1px); }
 
     .btn-primary svg { width: 16px; height: 16px; }
+
+    .btn-hero-ghost {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      background: transparent;
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-decoration: none;
+      padding: 0.9rem 1.8rem;
+      border-radius: 2px;
+      border: 1px solid var(--border);
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .btn-hero-ghost:hover { border-color: var(--ink); background: rgba(0,0,0,0.03); }
 
     .hero-stat {
       font-family: var(--font-mono);
@@ -1054,19 +1072,21 @@
     </div>
 
     <h1 class="hero-headline">
-      Reply<br/>
-      <em>Smarter.</em><br/>
-      Sound Human.
+      Turn Every Tweet<br/>
+      Into a <em>Conversation.</em>
     </h1>
 
     <div class="hero-left">
       <p class="hero-deck">
-        WittyWing crafts <strong>tone-matched reply suggestions</strong> for any tweet: funny, sarcastic, sincere, one-liner. One click. Your voice, amplified.
+        Generate authentic, engaging replies on X in seconds. <strong>Stay consistent, grow your audience</strong>, and never run out of things to say.
       </p>
       <div class="hero-actions">
         <a href="https://chromewebstore.google.com/detail/wittywing/nanmlpbedgfahicpngbhalhjokieoipa" class="btn-primary" target="_blank" rel="noopener">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.418 0-8-3.582-8-8s3.582-8 8-8 8 3.582 8 8-3.582 8-8 8zm-1-13v6l5 3-1 1.73L9 14V7h2z"/></svg>
-          Start Free Trial
+          Add to Chrome
+        </a>
+        <a href="#demo" class="btn-hero-ghost">
+          Watch Demo
         </a>
         <div style="display:flex;flex-direction:column;gap:0.3rem;">
           <span class="hero-stat" style="color:var(--ink);font-weight:500;">3 days free · 10 replies/day · no card needed</span>
@@ -1187,39 +1207,59 @@
     </div>
   </section>
 
-  <!-- ─── FEATURES ──────────────────────────────────────────────── -->
-  <section class="section">
-    <div class="section-label">Features</div>
-    <h2 class="section-title">Built for people<br/>who reply a <em style="font-style:italic">lot</em></h2>
+  <!-- ─── BENEFITS ──────────────────────────────────────────────── -->
+  <section class="section" id="benefits">
+    <div class="section-label">Benefits</div>
+    <h2 class="section-title">Engagement that<br/>actually <em style="font-style:italic">works</em></h2>
 
     <div class="features-grid">
       <div class="feature-item fade-up">
         <div class="feature-icon">
-          <svg viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
         </div>
-        <div class="feature-title">Instant generation</div>
-        <p class="feature-desc">Replies generated and copied to clipboard in under 3 seconds. No loading screens, no friction.</p>
+        <div class="feature-title">Save Time</div>
+        <p class="feature-desc">Stop spending minutes thinking about every reply. Generate authentic responses in seconds and stay in your flow.</p>
       </div>
       <div class="feature-item fade-up stagger-1">
         <div class="feature-icon">
-          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+          <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>
         </div>
-        <div class="feature-title">Context-aware suggestions</div>
-        <p class="feature-desc">WittyWing reads the full tweet thread, not just the tweet you're replying to, so every suggestion is always on point.</p>
+        <div class="feature-title">Stay Consistent</div>
+        <p class="feature-desc">Engagement is a marathon. WittyWing helps you show up every day and interact with your community without the burnout.</p>
       </div>
       <div class="feature-item fade-up stagger-2">
         <div class="feature-icon">
-          <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
         </div>
-        <div class="feature-title">No API key needed</div>
-        <p class="feature-desc">Server-managed API keys with rotation on quota limits. Just install and go. Zero configuration.</p>
+        <div class="feature-title">Sound Like You</div>
+        <p class="feature-desc">Customize your tone and style. WittyWing learns from your bio and past tweets to ensure every suggestion feels like your own voice.</p>
       </div>
       <div class="feature-item fade-up stagger-3">
         <div class="feature-icon">
-          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+          <svg viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
         </div>
-        <div class="feature-title">Personalized replies</div>
-        <p class="feature-desc">Sign in once and WittyWing learns your role, bio, and style. Every suggestion sounds authentically like you.</p>
+        <div class="feature-title">Grow Faster</div>
+        <p class="feature-desc">More conversations create more opportunities. Increase your impressions and reach by being active where it matters.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── BUILDERS SECTION ──────────────────────────────────────── -->
+  <section class="section" style="background: var(--cream); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+    <div class="section-label">Built for Builders</div>
+    <h2 class="section-title">Focus on your craft.<br/>Let WittyWing handle the <em>chatter.</em></h2>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; margin-top: 2rem;">
+      <p style="color: var(--muted); font-size: 1.1rem; line-height: 1.6;">
+        Whether you're a founder, indie hacker, marketer, or creator, WittyWing helps you stay visible without spending hours on X. Build in public, grow your network, and keep your focus where it matters—on your product.
+      </p>
+      <div style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--muted); background: var(--paper); padding: 2rem; border: 1px solid var(--border); border-radius: 4px;">
+        <div style="color: var(--ink); margin-bottom: 0.5rem; font-weight: 500;">Why founders love WittyWing:</div>
+        <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.5rem;">
+          <li>• Boost engagement on launch days</li>
+          <li>• Network with peers effortlessly</li>
+          <li>• Maintain a presence while coding</li>
+          <li>• Never run out of things to say</li>
+        </ul>
       </div>
     </div>
   </section>
@@ -1369,10 +1409,46 @@
 
     </div>
 
-    <p class="pricing-note">
-      Payment via UPI · Credits added within a few hours of payment confirmation.<br/>
-      Questions? <a href="https://x.com/ahmadparizaad" target="_blank" rel="noopener">DM on X @ahmadparizaad</a>
-    </p>
+    <div style="margin-top: 4rem; display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; align-items: start;">
+      <div class="fade-up">
+        <div class="section-label" style="font-size: 0.6rem; margin-bottom: 1rem;">Coming Soon</div>
+        <h3 style="font-family: var(--font-display); font-size: 1.5rem; margin-bottom: 1rem;">The future of WittyWing</h3>
+        <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.75rem; font-size: 0.9rem; color: var(--muted);">
+          <li style="display: flex; align-items: center; gap: 0.5rem;"><span style="color: var(--gold);">✦</span> Personal voice cloning (train on your tweets)</li>
+          <li style="display: flex; align-items: center; gap: 0.5rem;"><span style="color: var(--gold);">✦</span> Advanced engagement analytics</li>
+          <li style="display: flex; align-items: center; gap: 0.5rem;"><span style="color: var(--gold);">✦</span> Team workspaces & shared accounts</li>
+          <li style="display: flex; align-items: center; gap: 0.5rem;"><span style="color: var(--gold);">✦</span> Reply history & performance tracking</li>
+        </ul>
+      </div>
+      <p class="pricing-note fade-up stagger-1" style="margin-top: 0;">
+        Payment via UPI · Credits added within a few hours of payment confirmation.<br/>
+        Questions? <a href="https://x.com/ahmadparizaad" target="_blank" rel="noopener">DM on X @ahmadparizaad</a>
+      </p>
+    </div>
+  </section>
+
+  <!-- ─── FAQ SECTION ─────────────────────────────────────────── -->
+  <section class="section" id="faq">
+    <div class="section-label">FAQ</div>
+    <h2 class="section-title">Common questions</h2>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem 4rem; margin-top: 3rem;">
+      <div class="fade-up">
+        <h4 style="font-family: var(--font-display); font-size: 1.1rem; margin-bottom: 0.5rem;">Is WittyWing safe to use?</h4>
+        <p style="font-size: 0.9rem; color: var(--muted);">Yes. WittyWing is a Chrome extension that assists you. It doesn't automate your account or post without your permission. You are always in control of the final reply.</p>
+      </div>
+      <div class="fade-up stagger-1">
+        <h4 style="font-family: var(--font-display); font-size: 1.1rem; margin-bottom: 0.5rem;">Does it work on Twitter/X only?</h4>
+        <p style="font-size: 0.9rem; color: var(--muted);">Currently, WittyWing is optimized specifically for X (formerly Twitter) to provide the best tone-matching experience.</p>
+      </div>
+      <div class="fade-up stagger-2">
+        <h4 style="font-family: var(--font-display); font-size: 1.1rem; margin-bottom: 0.5rem;">Do I need my own AI API keys?</h4>
+        <p style="font-size: 0.9rem; color: var(--muted);">No. We handle all the technical setup and API management. You just install the extension and start replying.</p>
+      </div>
+      <div class="fade-up stagger-3">
+        <h4 style="font-family: var(--font-display); font-size: 1.1rem; margin-bottom: 0.5rem;">Can I customize the reply tones?</h4>
+        <p style="font-size: 0.9rem; color: var(--muted);">You can choose from 8 pre-set tones. Advanced voice cloning and style customization are coming soon to all users.</p>
+      </div>
+    </div>
   </section>
 
   <!-- ─── CTA ───────────────────────────────────────────────────── -->
@@ -1404,7 +1480,6 @@
 
     <ul class="footer-links">
       <li><a href="privacy.html">Privacy Policy</a></li>
-      <li><a href="https://github.com/ahmadparizaad/twitter-automation" target="_blank" rel="noopener">GitHub</a></li>
       <li><a href="https://x.com/ahmadparizaad" target="_blank" rel="noopener">Contact</a></li>
     </ul>
 

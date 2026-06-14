@@ -17,12 +17,11 @@
 //   if a run dies mid-post, the next run checks the profile timeline to
 //   decide whether the tweet actually went out (recover) or not (retry)
 
-import { chromium } from 'playwright';
-import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalize, textsOf, makeLog, loadQueue, saveQueue, acquireLock, releaseLock } from './lib.mjs';
+import { launchBrowser } from './browser.mjs';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const QUEUE_FILE = path.join(DIR, 'queue.json');
@@ -30,41 +29,12 @@ const PROFILE_DIR = path.join(os.homedir(), '.wittywing-poster', 'profile');
 const LOCK_FILE = path.join(DIR, 'logs', '.queue.lock');
 const MAX_JITTER_MINUTES = 12;
 
-// First existing browser wins. Bundled Chromium is the last resort and
-// requires `npx playwright install chromium`.
-const BROWSERS = [
-  { name: 'Brave', executablePath: '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser' },
-  { name: 'Chrome', channel: 'chrome' },
-  { name: 'Chromium' },
-];
-
 const log = makeLog(path.join(DIR, 'logs', 'poster.log'));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const save = (q) => saveQueue(QUEUE_FILE, q);
 
-async function launch() {
-  let lastErr;
-  for (const b of BROWSERS) {
-    if (b.executablePath && !fs.existsSync(b.executablePath)) continue;
-    try {
-      const ctx = await chromium.launchPersistentContext(PROFILE_DIR, {
-        headless: false,
-        channel: b.channel,
-        executablePath: b.executablePath,
-        viewport: null,
-        args: ['--disable-blink-features=AutomationControlled'],
-      });
-      log(`launched ${b.name}`);
-      return ctx;
-    } catch (err) {
-      lastErr = err;
-    }
-  }
-  throw lastErr ?? new Error('no usable browser found');
-}
-
 async function loginMode() {
-  const ctx = await launch();
+  const ctx = await launchBrowser(PROFILE_DIR, log);
   const page = ctx.pages()[0] ?? (await ctx.newPage());
   await page.goto('https://x.com/login');
   console.log('\nLog in to X in the opened window, then close the browser.\n');
@@ -72,11 +42,12 @@ async function loginMode() {
   log('login session saved to profile');
 }
 
-// True if an already-posted (or recovered) entry has the exact same text.
+// True if an already-posted (or scheduled-on-X) entry has the same text.
 function isDuplicate(entry, queue) {
   const key = textsOf(entry).map(normalize).join('\n');
   return queue.some(
-    (e) => e !== entry && e.posted_at && textsOf(e).map(normalize).join('\n') === key,
+    (e) => e !== entry && (e.posted_at || e.scheduled_on_x_at)
+      && textsOf(e).map(normalize).join('\n') === key,
   );
 }
 
@@ -91,20 +62,26 @@ async function postTweet(page, texts) {
   await sleep(1500 + Math.random() * 2500);
   await compose.click();
 
+  // The home timeline has its own inline composer with the same
+  // tweetTextarea_0 testid — scope everything to the modal dialog.
+  const composer = page.locator('[role="dialog"]')
+    .filter({ has: page.locator('[data-testid="tweetTextarea_0"]') })
+    .first();
+
   for (let i = 0; i < texts.length; i++) {
-    const box = page.locator(`[data-testid="tweetTextarea_${i}"]`);
+    const box = composer.locator(`[data-testid="tweetTextarea_${i}"]`).first();
     await box.waitFor({ state: 'visible', timeout: 10_000 });
     await box.click();
     await box.pressSequentially(texts[i], { delay: 20 + Math.random() * 35 });
     if (i < texts.length - 1) {
-      await page.locator('[data-testid="addButton"]').click();
+      await composer.locator('[data-testid="addButton"]').click();
     }
   }
 
   await sleep(800 + Math.random() * 1500);
-  await page.locator('[data-testid="tweetButton"]').click();
+  await composer.locator('[data-testid="tweetButton"]').first().click();
   // Composer disappearing is our success signal.
-  await page.locator('[data-testid="tweetTextarea_0"]').waitFor({ state: 'hidden', timeout: 20_000 });
+  await composer.locator('[data-testid="tweetTextarea_0"]').waitFor({ state: 'hidden', timeout: 20_000 });
 }
 
 // Checks the account's own profile timeline for the first 60 normalized chars
@@ -140,8 +117,10 @@ async function main() {
     // Attempts that started but never resolved (crash mid-post).
     const unresolved = queue.filter((e) => e.attempt_started_at && !e.posted_at);
 
+    // scheduled_on_x_at set = schedule-tweets.mjs already handed this entry
+    // to X's native scheduler — posting it here would double-post.
     const due = queue
-      .filter((e) => !e.posted_at && !e.attempt_started_at && !e.skipped_at && new Date(e.scheduled_at) <= now)
+      .filter((e) => !e.posted_at && !e.attempt_started_at && !e.skipped_at && !e.scheduled_on_x_at && !e.schedule_attempt_started_at && new Date(e.scheduled_at) <= now)
       .sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
 
     // Pick the first postable due entry; skip duplicates/over-length for good.
@@ -173,7 +152,7 @@ async function main() {
       await sleep(jitter);
     }
 
-    const ctx = await launch();
+    const ctx = await launchBrowser(PROFILE_DIR, log);
     try {
       const page = ctx.pages()[0] ?? (await ctx.newPage());
 

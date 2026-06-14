@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.wittywing.weekly</string>
+	<key>WorkingDirectory</key>
+	<string>/Users/ahmadparizaad/Projects/twitter-automation/marketing/automation</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/zsh</string>
+		<string>-c</string>
+		<string>/opt/homebrew/bin/node generate-tweets.mjs &amp;&amp; /opt/homebrew/bin/node schedule-tweets.mjs</string>
+	</array>
+	<!-- Sundays 20:00. Unlike cron, launchd runs a missed slot once on the
+	     next wake (not after a full shutdown). -->
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Weekday</key>
+		<integer>0</integer>
+		<key>Hour</key>
+		<integer>20</integer>
+		<key>Minute</key>
+		<integer>0</integer>
+	</dict>
+	<key>StandardOutPath</key>
+	<string>/Users/ahmadparizaad/Projects/twitter-automation/marketing/automation/logs/launchd.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/ahmadparizaad/Projects/twitter-automation/marketing/automation/logs/launchd.log</string>
+</dict>
+</plist>

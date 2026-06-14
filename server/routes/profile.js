@@ -30,23 +30,32 @@ router.get('/', requireAuth, async (req, res) => {
 router.post('/', requireAuth, async (req, res) => {
   try {
     const updates = req.body || {};
-    const toUpdate = {};
-    // Validate and sanitize allowed fields only
-    if (typeof updates.displayName === 'string') {
-      const dn = updates.displayName.trim();
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Validate and sanitize allowed fields
+    if (updates.displayName !== undefined) {
+      const dn = String(updates.displayName).trim();
       if (dn.length > 100) return res.status(400).json({ error: 'displayName is too long' });
-      toUpdate.displayName = dn;
+      user.displayName = dn;
     }
-    if (typeof updates.role === 'string') {
-      const r = updates.role.trim();
+    
+    if (updates.role !== undefined) {
+      const r = String(updates.role).trim();
       if (r.length > 100) return res.status(400).json({ error: 'role is too long' });
-      toUpdate.role = r;
+      user.role = r;
     }
-    if (typeof updates.short_bio === 'string') {
-      const bio = updates.short_bio.trim();
+    
+    if (updates.short_bio !== undefined) {
+      const bio = String(updates.short_bio).trim();
       if (bio.length > 280) return res.status(400).json({ error: 'short_bio is too long' });
-      toUpdate.short_bio = bio;
+      user.short_bio = bio;
     }
+    
+    if (updates.autoGenerate !== undefined) {
+      user.autoGenerate = updates.autoGenerate === true || updates.autoGenerate === 'true';
+    }
+    
     if (Array.isArray(updates.projects)) {
       const projects = updates.projects;
       if (projects.length > 50) return res.status(400).json({ error: 'too many projects' });
@@ -56,7 +65,10 @@ router.post('/', requireAuth, async (req, res) => {
         const name = (typeof p.name === 'string' ? p.name.trim() : '');
         const url = (typeof p.url === 'string' ? p.url.trim() : '');
         const description = (typeof p.description === 'string' ? p.description.trim() : '');
-        if (!name) return res.status(400).json({ error: `project[${i}].name is required` });
+        
+        if (!name && (url || description)) {
+          return res.status(400).json({ error: `project[${i}].name is required` });
+        }
         if (name.length > 100) return res.status(400).json({ error: `project[${i}].name is too long` });
         if (description.length > 280) return res.status(400).json({ error: `project[${i}].description is too long` });
         if (url) {
@@ -69,14 +81,17 @@ router.post('/', requireAuth, async (req, res) => {
             return res.status(400).json({ error: `project[${i}].url is invalid` });
           }
         }
-        sanitizedProjects.push({ name, url, description });
+        if (name) {
+          sanitizedProjects.push({ name, url, description });
+        }
       }
-      toUpdate.projects = sanitizedProjects;
+      user.projects = sanitizedProjects;
     }
-    // ensure only valid columns are updated
-    const user = await User.findByIdAndUpdate(req.user._id, { $set: toUpdate }, { new: true }).lean();
+
+    await user.save();
     res.json({ profile: user });
   } catch (err) {
+    console.error('Profile update error:', err);
     res.status(500).json({ error: 'Failed to update profile', details: err.message });
   }
 });

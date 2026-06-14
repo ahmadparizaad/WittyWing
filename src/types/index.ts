@@ -10,6 +10,7 @@ export interface Profile {
   role: string;
   short_bio: string;
   projects: Project[];
+  autoGenerate?: boolean;
 }
 
 export interface User {

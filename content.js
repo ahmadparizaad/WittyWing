@@ -101,6 +101,12 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
     );
   }
 
+  function findReplyButton() {
+    const dialog = document.querySelector('[role="dialog"]');
+    const scope = dialog || document;
+    return scope.querySelector('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]');
+  }
+
   // Insert generated text directly into the reply composer.
   // Returns true if the text ended up in the composer, false otherwise.
   async function insertReplyIntoComposer(replyText) {
@@ -111,39 +117,57 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
     }
 
     const probe = replyText.slice(0, 20).replace(/\s+/g, ' ');
-    const composerHasText = () => {
+    // Text can land in the contenteditable DOM without Draft.js registering it
+    // (placeholder stays visible, Reply button stays disabled), so textContent
+    // alone is not proof of success — the Reply button enabling is the signal
+    // that the editor state actually updated.
+    const composerAccepted = () => {
       const node = findReplyComposer();
-      return !!node && (node.textContent || '').replace(/\s+/g, ' ').includes(probe);
+      const hasText = !!node && (node.textContent || '').replace(/\s+/g, ' ').includes(probe);
+      if (!hasText) return false;
+      const button = findReplyButton();
+      return !!button && !button.disabled && button.getAttribute('aria-disabled') !== 'true';
     };
     const settle = () => new Promise((resolve) => setTimeout(resolve, 150));
 
-    try {
-      editor.focus();
-      // Replace any existing draft so regenerating doesn't append to the previous reply
-      document.execCommand('selectAll', false, null);
-      document.execCommand('delete', false, null);
-      document.execCommand('insertText', false, replyText);
-
-      await settle();
-      if (composerHasText()) {
-        return true;
-      }
-
-      // Fallback: a synthetic paste event, which Draft.js also handles. Clear the
-      // composer again first so this path can never stack on a successful insertText
-      // whose render we failed to detect.
-      const target = findReplyComposer() || editor;
+    const clearComposer = (target) => {
       target.focus();
       document.execCommand('selectAll', false, null);
       document.execCommand('delete', false, null);
+    };
+
+    try {
+      // Primary path: a synthetic paste event. Draft.js handles paste through its
+      // own pipeline, which updates editor state (removes the placeholder and
+      // enables the Reply button) — unlike insertText, which can write to the DOM
+      // without the editor noticing.
+      clearComposer(editor);
       const dt = new DataTransfer();
       dt.setData('text/plain', replyText);
-      target.dispatchEvent(
+      editor.dispatchEvent(
         new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })
       );
 
       await settle();
-      return composerHasText();
+      if (composerAccepted()) {
+        return true;
+      }
+
+      // Fallback: native editing commands. Clear first so this can never stack on
+      // text the paste left behind without updating editor state.
+      const target = findReplyComposer() || editor;
+      clearComposer(target);
+      document.execCommand('insertText', false, replyText);
+
+      await settle();
+      if (composerAccepted()) {
+        return true;
+      }
+
+      // Neither path updated editor state — remove any stray DOM text so the user
+      // isn't left with a composer that looks filled but won't submit.
+      clearComposer(findReplyComposer() || editor);
+      return false;
     } catch (e) {
       console.warn('Direct insertion into composer failed:', e);
       return false;
@@ -661,6 +685,33 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
             // Mark the reply modal as injected and add a class for easier identification
             replyModal.setAttribute('data-injected', 'true');
             replyModal.classList.add('twitter-automation-processed');
+
+            // Auto-trigger generation if setting is enabled
+            try {
+              const settings = await new Promise((resolve) => {
+                chrome.storage.local.get(['autoGenerate'], (res) => resolve(res || {}));
+              });
+              
+              if (settings && settings.autoGenerate === true) {
+                console.log('Auto-generate is enabled. Checking if composer is empty...');
+                
+                // Small delay to ensure Draft.js is ready and we can check content
+                setTimeout(async () => {
+                  const composer = findReplyComposer();
+                  const currentText = composer ? composer.textContent || '' : '';
+                  
+                  // Only auto-generate if the composer is empty (don't overwrite drafts)
+                  if (currentText.trim().length === 0) {
+                    console.log('Composer is empty. Triggering auto-generation.');
+                    generateButton.click();
+                  } else {
+                    console.log('Composer already has text. Skipping auto-generation to protect draft.');
+                  }
+                }, 500);
+              }
+            } catch (storageErr) {
+              console.warn('Failed to read autoGenerate setting:', storageErr);
+            }
           } else {
             console.error('Could not find common parent for action bar and tone buttons.');
           }

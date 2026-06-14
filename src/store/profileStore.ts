@@ -55,18 +55,29 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
         headers,
         withCredentials: true,
       });
+      
       const profileData = response.data.profile;
+      if (!profileData) throw new Error('No profile data received');
+
       // Ensure projects have IDs
       const projects = (profileData.projects || []).map((p: Omit<Project, 'id'> & { id?: string }) => ({
         ...p,
         id: p.id || generateProjectId(),
       }));
+
+      // Be explicit about boolean coercion
+      const autoGenerate = !!profileData.autoGenerate;
+      
+      // Save to local storage for content script
+      await chrome.storage.local.set({ autoGenerate });
+
       set({
         profile: {
           displayName: profileData.displayName || '',
           role: profileData.role || '',
           short_bio: profileData.short_bio || '',
           projects,
+          autoGenerate,
         },
         isLoading: false,
       });
@@ -84,31 +95,45 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     try {
       const headers = await getAuthHeaders();
       const currentProfile = get().profile;
+      
+      // Construct clean payload
       const payload = {
-        displayName: updates.displayName ?? currentProfile?.displayName ?? '',
-        role: updates.role ?? currentProfile?.role ?? '',
-        short_bio: updates.short_bio ?? currentProfile?.short_bio ?? '',
-        projects: (updates.projects ?? currentProfile?.projects ?? []).map((p) => ({
+        displayName: updates.displayName !== undefined ? updates.displayName : (currentProfile?.displayName || ''),
+        role: updates.role !== undefined ? updates.role : (currentProfile?.role || ''),
+        short_bio: updates.short_bio !== undefined ? updates.short_bio : (currentProfile?.short_bio || ''),
+        autoGenerate: updates.autoGenerate !== undefined ? updates.autoGenerate : (currentProfile?.autoGenerate || false),
+        projects: (updates.projects || currentProfile?.projects || []).map((p) => ({
           name: p.name,
           url: p.url,
           description: p.description,
         })),
       };
+
       const response = await axios.post(`${API_URL}/api/profile`, payload, {
         headers,
         withCredentials: true,
       });
+      
       const profileData = response.data.profile;
+      if (!profileData) throw new Error('Failed to update profile: No data returned');
+
       const projects = (profileData.projects || []).map((p: Omit<Project, 'id'> & { id?: string }) => ({
         ...p,
         id: p.id || generateProjectId(),
       }));
+
+      const autoGenerate = !!profileData.autoGenerate;
+      
+      // Sync storage
+      await chrome.storage.local.set({ autoGenerate });
+
       set({
         profile: {
           displayName: profileData.displayName || '',
           role: profileData.role || '',
           short_bio: profileData.short_bio || '',
           projects,
+          autoGenerate,
         },
         isSaving: false,
       });

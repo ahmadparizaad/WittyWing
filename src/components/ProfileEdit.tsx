@@ -55,7 +55,6 @@ export function ProfileEdit({ onNavigate, onStatusMessage }: ProfileEditProps) {
     isSaving,
     loadProfile,
     saveProfile,
-    updateField,
     addProject,
     updateProject,
     removeProject,
@@ -67,6 +66,7 @@ export function ProfileEdit({ onNavigate, onStatusMessage }: ProfileEditProps) {
   const [localDisplayName, setLocalDisplayName] = useState('');
   const [localRole, setLocalRole] = useState('');
   const [localBio, setLocalBio] = useState('');
+  const [localAutoGenerate, setLocalAutoGenerate] = useState(false);
 
   // Sync local state with profile
   useEffect(() => {
@@ -74,6 +74,7 @@ export function ProfileEdit({ onNavigate, onStatusMessage }: ProfileEditProps) {
       setLocalDisplayName(profile.displayName);
       setLocalRole(profile.role);
       setLocalBio(profile.short_bio);
+      setLocalAutoGenerate(profile.autoGenerate ?? false);
     }
   }, [profile]);
 
@@ -112,22 +113,20 @@ export function ProfileEdit({ onNavigate, onStatusMessage }: ProfileEditProps) {
   }, [profile?.projects]);
 
   const handleSave = async () => {
-    // Update store with local state first
-    updateField('displayName', localDisplayName.trim());
-    updateField('role', localRole.trim());
-    updateField('short_bio', localBio.trim());
-
     if (!validateAllProjects()) {
       onStatusMessage('Please fix project validation errors before saving.', 'error');
       return;
     }
 
-    const success = await saveProfile({
+    const updates = {
       displayName: localDisplayName.trim(),
       role: localRole.trim(),
       short_bio: localBio.trim(),
+      autoGenerate: localAutoGenerate,
       projects: profile?.projects || [],
-    });
+    };
+
+    const success = await saveProfile(updates);
 
     if (success) {
       onStatusMessage('Profile saved.', 'success');
@@ -202,6 +201,19 @@ export function ProfileEdit({ onNavigate, onStatusMessage }: ProfileEditProps) {
         rows={3}
         className="w-full px-2 py-2 mb-3 rounded border border-white/5 bg-white/[0.02] text-text box-border outline-none focus:shadow-input-focus transition-all"
       />
+
+      <div className="flex items-center gap-2 mb-4">
+        <input
+          type="checkbox"
+          id="autoGenerate"
+          checked={localAutoGenerate}
+          onChange={(e) => setLocalAutoGenerate(e.target.checked)}
+          className="w-4 h-4 cursor-pointer"
+        />
+        <label htmlFor="autoGenerate" className="text-sm font-semibold text-text cursor-pointer">
+          Auto-generate replies
+        </label>
+      </div>
 
       <label className="block mb-1.5 font-semibold text-muted text-xs">Projects:</label>
       <div className="flex flex-col gap-2 mb-1.5">

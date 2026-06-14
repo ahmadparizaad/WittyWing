@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.wittywing.poster</string>
+	<key>WorkingDirectory</key>
+	<string>/Users/ahmadparizaad/Projects/twitter-automation/marketing/automation</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/opt/homebrew/bin/node</string>
+		<string>post-tweet.mjs</string>
+	</array>
+	<!-- Daily 09:30 fallback: posts only entries schedule-tweets.mjs could
+	     not hand to X's native scheduler (threads, failed runs). Runs missed
+	     slots on next wake. -->
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key>
+		<integer>9</integer>
+		<key>Minute</key>
+		<integer>30</integer>
+	</dict>
+	<key>StandardOutPath</key>
+	<string>/Users/ahmadparizaad/Projects/twitter-automation/marketing/automation/logs/launchd.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/ahmadparizaad/Projects/twitter-automation/marketing/automation/logs/launchd.log</string>
+</dict>
+</plist>

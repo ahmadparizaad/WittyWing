@@ -16,6 +16,7 @@ const UserSchema = new mongoose.Schema({
   refreshToken: String,
   refreshTokenExpiresAt: { type: Date, index: { expires: 0 } },
   preferences: { type: Object, default: {} },
+  autoGenerate: { type: Boolean, default: false },
 
   // Plan & billing
   plan: { type: String, enum: ['trial', 'credits'], default: 'trial' },
