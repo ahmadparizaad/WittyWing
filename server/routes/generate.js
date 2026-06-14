@@ -45,8 +45,8 @@ const geminiModelPool = {
 
 const orModelPool = {
   models: [
-    { name: 'google/gemma-4-26b-a4b-it:free', disabledUntil: null },
-    { name: 'stepfun/step-3.5-flash:free', disabledUntil: null },
+    { name: 'google/gemma-4-31b-it:free', disabledUntil: null },
+    { name: 'qwen/qwen3-coder:free', disabledUntil: null },
     { name: 'nvidia/nemotron-3-super-120b-a12b:free', disabledUntil: null },
     { name: 'openai/gpt-oss-20b:free', disabledUntil: null }
   ],
@@ -128,7 +128,7 @@ function makePrompt(user, tweet_text, tone, images = []) {
     bioPart ? `Bio: ${bioPart}` : null,
     projectPart ? projectPart : null,
     ``,
-    `Write a single short reply that matches the tone and reflects the user's voice and background. Keep it under 200 characters — be punchy and direct, not verbose. Output only the reply text — no labels, no quotes, no explanation. NEVER use em dashes (— or –). NEVER use bullet points or lists.`,
+    `Write a single short reply that matches the tone and reflects the user's voice and background. Keep it under 200 characters — be punchy and direct, not verbose. Output only the reply text — no labels, no quotes, no explanation. Use only commas and periods for punctuation. NEVER use bullet points or lists.`,
   ].filter(v => v !== null).join('\n');
 
   // User message: just the tweet
@@ -522,9 +522,9 @@ async function callOpenRouter(promptInput, options = {}) {
 
     function sanitizeReply(text) {
       return text
-        .replace(/(\d)\s*[—–]\s*(\d)/g, '$1-$2') // numeric ranges: 9–5 -> 9-5
-        .replace(/\s*[—–]\s*/g, ', ') // prose em/en dashes read naturally as a comma
-        .replace(/,\s*,+/g, ',') // collapse doubled commas if the model already had one
+        .replace(/(\d)\s*[—–−―]\s*(\d)/g, '$1-$2') // numeric ranges: 9–5 -> 9-5
+        .replace(/\s*[—–−―]\s*/g, ', ') // prose dashes read naturally as a comma
+        .replace(/,\s*,+/g, ',') // collapse doubled commas
         .replace(/  +/g, ' ')
         .replace(/^[,\s]+/, '')
         .trim();
