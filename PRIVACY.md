@@ -16,8 +16,8 @@ This Privacy Policy describes how the WittyWing Chrome extension ("the Extension
 - We do not share your Gemini API key or tweet text with any third parties other than Google Gemini (the API provider) when making API calls. We do not collect or transmit analytics, logs, or other user data to external servers.
 
 4. Security
-- The API key is stored in `chrome.storage.local` and is accessible only to the Extension. Do not share your API key with untrusted parties.
-- We recommend using a dedicated API key with appropriate permissions and monitoring your Google Cloud usage and quotas.
+- Authentication tokens (JWT) are stored in `chrome.storage.local` and are accessible only to the Extension. Do not share these tokens with untrusted parties.
+- All network communications between the Extension and the backend server are encrypted using HTTPS.
 
 5. Deleting your data
 - The extension does not store a Gemini API key locally. To remove your profile or session data stored server-side, sign out via the popup or contact the server operator.
