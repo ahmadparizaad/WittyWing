@@ -295,7 +295,7 @@ router.post('/', async (req, res) => {
 
             const geminiBody = {
               contents: [{ parts: parts }],
-              generationConfig: { maxOutputTokens: 80, temperature: 0.7 }
+              generationConfig: { maxOutputTokens: 150, temperature: 0.7 }
             };
             if (sysMsg) geminiBody.systemInstruction = { parts: [{ text: sysMsg }] };
 
@@ -432,7 +432,7 @@ async function callOpenRouter(promptInput, options = {}) {
           model: modelName,
           messages: messages,
           temperature: 0.7,
-          max_tokens: 100,
+          max_tokens: 150,
           reasoning: { enabled: false }
         }, {
           headers: {
