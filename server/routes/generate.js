@@ -295,7 +295,7 @@ router.post('/', async (req, res) => {
 
             const geminiBody = {
               contents: [{ parts: parts }],
-              generationConfig: { maxOutputTokens: 150, temperature: 0.7 }
+              generationConfig: { maxOutputTokens: 200, temperature: 0.7, thinkingConfig: { thinkingBudget: 0 } }
             };
             if (sysMsg) geminiBody.systemInstruction = { parts: [{ text: sysMsg }] };
 
