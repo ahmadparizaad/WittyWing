@@ -131,6 +131,43 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             reply = genResp.data && genResp.data.reply;
           } else {
             console.warn('Server generate failed with status', genResp && genResp.status);
+            const status = genResp && genResp.status;
+            const data = genResp && genResp.data;
+            const serverMsg = data && (data.message || data.error);
+
+            if (status === 401) {
+              sendResponse({
+                error: 'SESSION_EXPIRED',
+                message:
+                  'Your session has expired. Please open the WittyWing extension and sign in again.',
+                tweetId: request.tweetId,
+              });
+              return;
+            } else if (status === 402 || status === 403) {
+              sendResponse({
+                error: 'CREDITS_EXPIRED',
+                message:
+                  serverMsg ||
+                  "You've run out of credits. Please top up to keep generating replies.",
+                tweetId: request.tweetId,
+              });
+              return;
+            } else if (status === 429) {
+              sendResponse({
+                error: 'LIMIT_REACHED',
+                message: serverMsg || 'Generation limit reached. Please try again later.',
+                tweetId: request.tweetId,
+              });
+              return;
+            } else if (status >= 400) {
+              sendResponse({
+                error: 'SERVER_ERROR',
+                message:
+                  serverMsg || 'Something went wrong on the server. Please try again in a moment.',
+                tweetId: request.tweetId,
+              });
+              return;
+            }
           }
         } catch (err) {
           console.warn('Server generate failed, error:', err && (err.message || err.toString()));

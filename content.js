@@ -608,6 +608,14 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
                       8000,
                       'error'
                     );
+                  } else if (replyResponse.error === 'LIMIT_REACHED') {
+                    showToast(
+                      '⏳ ' +
+                        (replyResponse.message ||
+                          'Generation limit reached. Please try again later.'),
+                      8000,
+                      'error'
+                    );
                   } else {
                     showToast(
                       '⚠️ ' + (replyResponse.message || replyResponse.error),
@@ -691,21 +699,23 @@ if (window.hasTwitterAutomationLLMContentScriptRun) {
               const settings = await new Promise((resolve) => {
                 chrome.storage.local.get(['autoGenerate'], (res) => resolve(res || {}));
               });
-              
+
               if (settings && settings.autoGenerate === true) {
                 console.log('Auto-generate is enabled. Checking if composer is empty...');
-                
+
                 // Small delay to ensure Draft.js is ready and we can check content
                 setTimeout(async () => {
                   const composer = findReplyComposer();
                   const currentText = composer ? composer.textContent || '' : '';
-                  
+
                   // Only auto-generate if the composer is empty (don't overwrite drafts)
                   if (currentText.trim().length === 0) {
                     console.log('Composer is empty. Triggering auto-generation.');
                     generateButton.click();
                   } else {
-                    console.log('Composer already has text. Skipping auto-generation to protect draft.');
+                    console.log(
+                      'Composer already has text. Skipping auto-generation to protect draft.'
+                    );
                   }
                 }, 500);
               }
