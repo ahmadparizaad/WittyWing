@@ -321,10 +321,15 @@ router.post('/', async (req, res) => {
               model.disabledUntil = Date.now() + (90 * 1000);
               break; // Try next model
             }
+            if (status === 503) {
+              // Model overloaded — back off briefly and try next model, key isn't at fault
+              model.disabledUntil = Date.now() + (30 * 1000);
+              break; // Try next model
+            }
             if (status === 401 || status === 403) {
               geminiPool.keyState.disabled[candidateKey] = Date.now() + (600 * 1000);
             }
-            
+
             keyAttempts++;
           }
         }
