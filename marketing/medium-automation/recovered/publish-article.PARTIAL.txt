@@ -1,4 +1,4 @@
-RECOVERED FRAGMENTS of publish-article.mjs (526 lines in its last known state). NOT RUNNABLE. DO NOT RENAME TO .mjs.
+RECOVERED FRAGMENTS of the ORIGINAL publish-article.mjs (superseded by the rebuilt publish-article.mjs; kept for reference only). NOT RUNNABLE.
 
 How this was produced: the original session transcript is gone; only a tool-output log capped at ~5000 characters per
 result survives. This is a best-effort merge of every Read window and every complete Edit, applied in time order.
