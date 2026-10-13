@@ -1,0 +1,9 @@
+{
+  "name": "wittywing-medium-automation",
+  "private": true,
+  "type": "module",
+  "description": "Launchd-driven Medium article pipeline: OpenSEO keyword research + claude-cli article generation + browser-session publishing",
+  "dependencies": {
+    "playwright": "^1.50.0"
+  }
+}
