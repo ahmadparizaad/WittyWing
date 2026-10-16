@@ -12,8 +12,11 @@ import { fileURLToPath } from 'node:url';
 import { normalize, textsOf, makeLog, acquireLock, releaseLock } from './lib.mjs';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
-const QUEUE_FILE = path.join(DIR, 'queue.json');
-const LOCK_FILE = path.join(DIR, 'logs', '.queue.lock');
+// Posting moved to x-agent (~/Projects/x-agent); with XAGENT_HOME set, write
+// into its queue and share its lock.
+const STATE_DIR = process.env.XAGENT_HOME ?? DIR;
+const QUEUE_FILE = path.join(STATE_DIR, 'queue.json');
+const LOCK_FILE = path.join(STATE_DIR, 'logs', '.queue.lock');
 const LOG_FILE = path.join(DIR, 'logs', 'generator.log');
 const CLAUDE_BIN = process.env.CLAUDE_BIN ?? path.join(os.homedir(), '.local', 'bin', 'claude');
 const TWEETS_PER_WEEK = 7;
@@ -110,7 +113,7 @@ function main() {
   log(`queued ${entries.length} tweets (${entries[0].id} → ${entries.at(-1).id})`);
 }
 
-// Shares a lock with post-tweet.mjs so the two never read-modify-write
+// Shares x-agent's queue lock (with XAGENT_HOME) so the two never read-modify-write
 // queue.json at the same time. The poster can hold it for up to ~15 min
 // (jitter + posting), so retry for a while before giving up.
 async function run() {

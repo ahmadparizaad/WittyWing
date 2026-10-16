@@ -1,4 +1,4 @@
-// Shared helpers for post-tweet.mjs and generate-tweets.mjs.
+// Shared helpers for generate-tweets.mjs (posting moved to x-agent).
 import fs from 'node:fs';
 import path from 'node:path';
 
