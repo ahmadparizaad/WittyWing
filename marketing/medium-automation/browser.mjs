@@ -1,4 +1,4 @@
-// Shared browser launching for post-tweet.mjs and schedule-tweets.mjs.
+// Shared browser launching for publish-article.mjs and inspect-medium.mjs.
 // (Kept out of lib.mjs so the generator doesn't pay the playwright import.)
 import { chromium } from 'playwright';
 import fs from 'node:fs';

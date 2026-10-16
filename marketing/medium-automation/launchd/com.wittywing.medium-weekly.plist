@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.wittywing.medium-weekly</string>
+	<key>WorkingDirectory</key>
+	<string>/Users/ahmadparizaad/Projects/twitter-automation/marketing/medium-automation</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/zsh</string>
+		<string>-c</string>
+		<string>/opt/homebrew/bin/node generate-article.mjs &amp;&amp; /opt/homebrew/bin/node publish-article.mjs</string>
+	</array>
+	<!-- Sundays + Wednesdays 21:00 (2x/week) — one hour after com.wittywing.weekly
+	     (X track) so the two don't contend for CPU/network on the same box.
+	     Like the X jobs, launchd runs a missed slot once on next wake (not
+	     after full shutdown). -->
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict>
+			<key>Weekday</key>
+			<integer>0</integer>
+			<key>Hour</key>
+			<integer>21</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+		<dict>
+			<key>Weekday</key>
+			<integer>3</integer>
+			<key>Hour</key>
+			<integer>21</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+	</array>
+	<key>StandardOutPath</key>
+	<string>/Users/ahmadparizaad/Projects/twitter-automation/marketing/medium-automation/logs/launchd.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/ahmadparizaad/Projects/twitter-automation/marketing/medium-automation/logs/launchd.log</string>
+</dict>
+</plist>

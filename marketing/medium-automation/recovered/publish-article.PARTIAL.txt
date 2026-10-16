@@ -1,0 +1,541 @@
+RECOVERED FRAGMENTS of the ORIGINAL publish-article.mjs (superseded by the rebuilt publish-article.mjs; kept for reference only). NOT RUNNABLE.
+
+How this was produced: the original session transcript is gone; only a tool-output log capped at ~5000 characters per
+result survives. This is a best-effort merge of every Read window and every complete Edit, applied in time order.
+Known problems:
+  - 149 lines are unknown (marked /*__MISSING__*/): the end of publishArticle() and the whole main run loop.
+  - 5 large edits were truncated in the log and could not be applied; one of them inserted ~100 lines.
+  - Edits were placed by text matching, so the middle of the file mixes versions (duplicate function names, comment
+    fragments between functions). A syntax check fails.
+What IS valuable here: the header (safety properties, crash-safe attempt_started_at design), loginMode(), the Medium
+editor knowledge in comments (title/body share one contenteditable, the off-screen decoy element, selection and
+toolbar quirks, the /submission redirect after Publish) and the helper functions' bodies.
+To get a working publisher: rewrite it from this, then verify selectors with `node inspect-medium.mjs` and run one
+supervised cycle (see README.md). Mirror marketing/automation/post-tweet.mjs for the queue state machine.
+=====================================================================================================================
+#!/usr/bin/env node
+// Publishes the oldest due, unpublished article from queue.json using a
+// persistent, logged-in browser profile (separate from the X poster's
+// profile). Mirrors marketing/automation/post-tweet.mjs's state machine.
+//
+// Usage:
+//   node publish-article.mjs --login   open the browser, log in to Medium manually, close the window
+//   node publish-article.mjs           publish the oldest due article
+//
+// Publishes at most ONE queue entry per run.
+//
+// NOTE: Medium's editor DOM/selectors below are best-effort placeholders.
+// Run `node inspect-medium.mjs` first against a real logged-in session to
+// confirm/fix them before relying on this in production — same workflow as
+// inspect-schedule.mjs in the X pipeline.
+//
+// Safety properties (mirror post-tweet.mjs):
+// - lock file shared with the generator: no concurrent queue.json writes
+// - crash-safe publishing: attempt_started_at is written BEFORE clicking
+//   Publish; if a run dies mid-publish, the next run checks the profile's
+//   story list to decide whether the article actually went out (recover) or
+//   not (retry)
+
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { normalize, makeLog, loadQueue, saveQueue, acquireLock, releaseLock } from './lib.mjs';
+import { launchBrowser } from './browser.mjs';
+import { invalidReason } from './article.mjs';
+
+const DIR = path.dirname(fileURLToPath(import.meta.url));
+const QUEUE_FILE = path.join(DIR, 'queue.json');
+const PROFILE_DIR = path.join(os.homedir(), '.wittywing-medium', 'profile');
+const LOCK_FILE = path.join(DIR, 'logs', '.queue.lock');
+
+const log = makeLog(path.join(DIR, 'logs', 'publisher.log'));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const save = (q) => saveQueue(QUEUE_FILE, q);
+
+// Defense in depth: the generator validates before queuing (via the same
+// invalidReason() from article.mjs), but an entry could reach the publisher
+// some other way (manual edit, older queue.json). Refuses to publish
+// anything malformed rather than trusting the queue blindly.
+
+async function loginMode() {
+  const ctx = await launchBrowser(PROFILE_DIR, log);
+  const page = ctx.pages()[0] ?? (await ctx.newPage());
+  await page.goto('https://medium.com/m/signin');
+  console.log('\nLog in to Medium in the opened window, then close the browser.\n');
+  await new Promise((resolve) => ctx.on('close', resolve));
+  log('login session saved to profile');
+}
+
+// Types markdown into Medium's story body. Medium's title and body share ONE
+// contenteditable container (a series of <h3>/<p> "graf" elements) — title
+// is the leading <h3 data-testid="editorTitleParagraph">, body paragraphs
+// are siblings created as you type and press Enter. There IS a second
+// `[contenteditable="true"]` element elsewhere in the DOM, but it's an
+// off-screen (x: -9999) decoy/utility element, not a visible body field —
+// confirmed live: clicking it always failed with a Playwright "element is
+// outside of the viewport" timeout. The fix is to not click anything new at
+// all: after typing the title and pressing Enter (in publishArticle()),
+// focus is already inside the next paragraph, so this just keeps typing.
+async function typeBody(page, bodyMarkdown) {
+  const paragraphs = bodyMarkdown.split(/\n{2,}/);
+  for (let i = 0; i < paragraphs.length; i++) {
+    await page.keyboard.type(paragraphs[i], { delay: 15 + Math.random() * 25 });
+    if (i < paragraphs.length - 1) await page.keyboard.press('Enter');
+    // Medium auto-converts markdown shortcuts (## , **bold**) asynchronously
+    // after each paragraph; too short a pause here can outrun that and land
+    // the next paragraph's keystrokes mid-conversion.
+    await sleep(500 + Math.random() * 500);
+  }
+}
+
+async function publishArticle(page, entry) {
+  await page.goto('https://medium.com/new-story', { waitUntil: 'domcontentloaded' });
+
+  // Confirmed via inspect-medium.mjs: the title paragraph is the only
+  // element on the page carrying this testid.
+  const titleField = page.locator('[data-testid="editorTitleParagraph"]').first();
+  try {
+// Medium's "h3" action — the larger of its two heading sizes), and single
+// bold spans, both producing correctly formatted <h3>/<strong> output.
+async function moveToLineStart(page) {
+  await page.keyboard.down('Meta');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.up('Meta');
+  await sleep(150);
+}
+
+async function selectWholeLine(page) {
+  await moveToLineStart(page);
+  await page.keyboard.down('Meta');
+  await page.keyboard.down('Shift');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.up('Shift');
+  await page.keyboard.up('Meta');
+  await sleep(300);
+// exact failing case (a 47-character bold span at the start of a ~230
+// character wrapped paragraph) — selection now lands exactly right.
+//
+// Operates on whichever paragraph currently holds the DOM selection focus
+// (found via closest() from window.getSelection().focusNode), so the
+// caller must ensure focus is already in the right paragraph (true after
+// typing into it, which is the only way this is used).
+async function selectOffsetRangeDOM(page, start, end) {
+  const result = await page.evaluate(({ start, end }) => {
+    const sel = window.getSelection();
+    const node = sel.focusNode;
+    const container = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+    const para = container?.closest('[data-testid="editorParagraphText"], [data-testid="editorTitleParagraph"]');
+    if (!para) return { ok: false, reason: 'no paragraph found from current selection focus' };
+
+    // Walk the paragraph's text nodes to map flat character offsets to
+    // (node, localOffset) pairs — handles a paragraph split across
+    // multiple text nodes (e.g. one already containing a <strong> span).
+    const walker = document.createTreeWalker(para, NodeFilter.SHOW_TEXT);
+    let startNode = null, startOffset = 0;
+    let endNode = null, endOffset = 0;
+    let consumed = 0;
+    let n;
+    while ((n = walker.nextNode())) {
+      const len = n.textContent.length;
+      if (len === 0) continue; // zero-length text nodes contribute no offset
+      if (startNode === null && consumed + len >= start) {
+        startNode = n;
+        startOffset = start - consumed;
+      }
+      if (endNode === null && consumed + len >= end) {
+        endNode = n;
+        endOffset = end - consumed;
+      }
+      consumed += len;
+      if (startNode && endNode) break;
+    }
+    if (!startNode || !endNode) {
+      return { ok: false, reason: `offset out of range (paragraph has ${consumed} chars, wanted ${start}-${end})` };
+    }
+
+    const range = document.createRange();
+    range.setStart(startNode, startOffset);
+    range.setEnd(endNode, endOffset);
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    // Medium's floating format toolbar listens for real user interaction
+    // events (a mouse-drag selection fires these naturally) — a Range set
+    // purely via addRange() often leaves the toolbar hidden even though the
+    // selection itself is completely correct. Confirmed live: dispatching
+    // these two synthetic events after setting the range made the toolbar
+    // appear reliably (5/5 trials) where it had previously been flaky.
+    document.dispatchEvent(new Event('selectionchange', { bubbles: true }));
+    para.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    return { ok: true };
+  }, { start, end });
+
+  if (!result.ok) throw new Error(`selectOffsetRangeDOM failed: ${result.reason}`);
+  await sleep(250);
+}
+
+async function selectWholeLine(page) {
+  const textLength = await page.evaluate(() => window.getSelection().focusNode?.textContent?.length ?? 0);
+  await selectOffsetRangeDOM(page, 0, textLength);
+}
+
+// Verifies the live selection's text matches what was intended before
+// formatting it — a single, generic check that catches focus having
+// drifted to the wrong paragraph, an offset miscount, or any other
+// selection bug, without needing to guard against each cause individually.
+// Throws (caught by withToolbarRetry, which re-selects from scratch) rather
+// than silently formatting whatever happens to be selected.
+async function verifySelection(page, expectedText) {
+  const actual = await page.evaluate(() => window.getSelection().toString());
+  if (actual !== expectedText) {
+    throw new Error(`selection mismatch before formatting: expected "${expectedText}", got "${actual}"`);
+  }
+}
+
+// Collapses the cursor to the true end of the current paragraph's text —
+// same wrapped-paragraph bug as selectOffsetRangeDOM's header comment
+// describes applies to Meta+ArrowRight ("end of line") too, so this also
+// uses the DOM directly rather than a keyboard shortcut.
+async function collapseToParagraphEnd(page) {
+  await page.evaluate(() => {
+    const sel = window.getSelection();
+    const node = sel.focusNode;
+    const container = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+    const para = container?.closest('[data-testid="editorParagraphText"], [data-testid="editorTitleParagraph"]');
+    if (!para) return;
+    const range = document.createRange();
+    range.selectNodeContents(para);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  });
+  await sleep(150);
+}
+
+async function clickToolbarAction(page, action) {
+  const btn = page.locator(`button[data-action="${action}"]`).first();
+  await btn.waitFor({ state: 'visible', timeout: 8_000 });
+  await btn.click();
+  await sleep(400);
+}
+
+// The toolbar occasionally fails to render for a selection despite the
+// selection itself being correct — confirmed intermittent in live testing
+// (identical code succeeded on some runs, failed on others with no
+// reproducible trigger). reselect() re-does the whole selection from
+// scratch (not just re-waiting on the existing one) since a stale/collapsed
+// selection is the most likely cause. Only wraps the two format-and-click
+// steps, not the surrounding typing, so a retry never re-types text.
+async function withToolbarRetry(reselect, action, attempts = 3) {
+  let lastErr;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      await reselect();
+      await clickToolbarAction(action.page, action.name);
+      return;
+    } catch (err) {
+    await page.keyboard.type(heading, { delay: 12 + Math.random() * 15 });
+    await sleep(300);
+    await withToolbarRetry(
+      async () => {
+        await selectWholeLine(page);
+        await verifySelection(page, heading);
+
+// Strips `code` backtick markers, keeping the inner text. Medium silently
+// eats backtick characters as you type them (confirmed live: typing a
+// `code span` results in DOM text "code span" with the backticks gone and
+// no code styling applied — there's no working inline-code mechanism to
+// hook into, so this treats backticks the same as a markdown feature
+// Medium doesn't support at all: strip the markers, keep the text plain,
+// same safe-degradation approach as extra ** bold spans). Must run BEFORE
+// any offset math so character positions match what Medium will actually
+// contain after typing.
+function stripInlineCode(line) {
+  return line.replace(/`([^`]+)`/g, '$1');
+}
+
+// Strips ## /### markers from a heading line, returning the plain text.
+// Also strips any ** bold markers within it (headings are always formatted
+// as a whole via the h3 toolbar action, so an inner **bold** span would
+// otherwise show as literal asterisks with no way to format just part of a
+// heading's text through the same select-and-click mechanism). Assumes
+// inline-code backticks were already stripped by the caller (typeParagraph).
+function parseHeading(line) {
+  const text = line.match(/^#{2,3}\s+(.*)/)?.[1];
+  return text != null ? text.replace(/\*\*(.+?)\*\*/g, '$1') : null;
+}
+
+// Finds the first **bold** span in a line. Returns the line with all **
+// markers removed (first span's text kept in place for later selection,
+// any further spans left as plain unformatted text) plus the character
+// offsets of the first span within that plain text, or null if there's no
+// bold span at all. Also reports how many additional bold spans (if any)
+// got their markers stripped without being formatted, so the caller can log
+// it — this is a deliberate, visible quality tradeoff, not a silent one.
+function parseFirstBoldSegment(line) {
+  const re = /\*\*(.+?)\*\*/g;
+  const first = re.exec(line);
+  if (!first) return { plainText: line, boldRange: null, droppedCount: 0 };
+  const before = line.slice(0, first.index);
+  const boldText = first[1];
+  const afterRaw = line.slice(re.lastIndex);
+  const droppedCount = (afterRaw.match(/\*\*(.+?)\*\*/g) ?? []).length;
+  const after = afterRaw.replace(/\*\*(.+?)\*\*/g, '$1');
+  return {
+    plainText: before + boldText + after,
+    boldRange: { start: before.length, end: before.length + boldText.length },
+    droppedCount,
+  };
+}
+
+async function typeParagraph(page, rawLine, log) {
+  const line = stripInlineCode(rawLine);
+  const heading = parseHeading(line);
+  if (heading !== null) {
+    await page.keyboard.type(heading, { delay: 12 + Math.random() * 15 });
+    await sleep(300);
+    await withToolbarRetry(
+      async () => {
+        await selectWholeLine(page);
+        await verifySelection(page, heading);
+      },
+      { page, name: 'h3', log },
+    );
+    await collapseToParagraphEnd(page);
+    return;
+  }
+
+  const { plainText, boldRange, droppedCount } = parseFirstBoldSegment(line);
+  if (droppedCount > 0) {
+    log?.(`only the first bold span in "${line.slice(0, 50)}..." was formatted — ${droppedCount} additional bold marker(s) stripped and left as plain text (known limit: formatting a 2nd bold span in a line with an existing <strong> reliably breaks Medium's toolbar selection)`);
+  }
+  await page.keyboard.type(plainText, { delay: 12 + Math.random() * 15 });
+  await sleep(300);
+  if (boldRange) {
+    const expectedBoldText = plainText.slice(boldRange.start, boldRange.end);
+    await withToolbarRetry(
+      async () => {
+        await selectOffsetRangeDOM(page, boldRange.start, boldRange.end);
+        await verifySelection(page, expectedBoldText);
+      },
+      { page, name: 'bold', log },
+    );
+    await collapseToParagraphEnd(page);
+  }
+}
+
+async function typeBody(page, bodyMarkdown, log) {
+  const paragraphs = bodyMarkdown.split(/\n{2,}/);
+  for (let i = 0; i < paragraphs.length; i++) {
+    await typeParagraph(page, paragraphs[i], log);
+    if (i < paragraphs.length - 1) {
+      await page.keyboard.press('Enter');
+    throw new Error('body text did not appear after typing — article body may be empty');
+  }
+
+  // Medium occasionally shows a dismissible onboarding tip drawer
+  // (".js-drawer", e.g. "Select text to change formatting...") after the
+  // first selection/formatting action in a session — confirmed live: it
+  // caused a real publish run to fail with "element intercepts pointer
+  // events" on the Publish button click. It's hidden (display:none) most of
+  // the time, so only dismiss it if actually visible.
+  const tipDrawerClose = page.locator('button[data-action="toggle-drawer"]').first();
+  // .catch(() => false) covers the button not existing in the DOM at all
+  // (not just being hidden) — either way, treat it as "nothing to dismiss".
+  if (await tipDrawerClose.isVisible().catch(() => false)) {
+    await tipDrawerClose.click();
+    await sleep(400);
+  }
+
+  // Confirmed via a live test run: Medium's top-bar Publish button has no
+  // testid, only matchable by its visible text. Clicking it opens a "Story
+  // preview" overlay (URL becomes /p/{id}/submission) with a topic picker.
+  const publishBtn = page.locator('button:has-text("Publish")').first();
+  await publishBtn.waitFor({ state: 'visible', timeout: 10_000 });
+  await sleep(800 + Math.random() * 1200);
+  await publishBtn.click();
+
+  // Confirmed via live test: this can take a few seconds to render, and the
+  // tag input's placeholder is exactly "Add a topic..." (with ellipsis).
+  const tagInput = page.locator('input[placeholder="Add a topic..."]').first();
+  await tagInput.waitFor({ state: 'visible', timeout: 20_000 });
+  for (const tag of entry.tags) {
+    await tagInput.click();
+    await page.keyboard.type(tag, { delay: 20 + Math.random() * 35 });
+    await page.keyboard.press('Enter');
+    await sleep(300 + Math.random() * 500);
+  }
+
+  // Confirmed via live test: once the tag picker is open, the top-bar
+  // Publish button is gone (replaced by this overlay) — there is exactly one
+  // "Publish" button in the DOM at this point, so no extra scoping is
+  // needed. It sits next to a "Schedule for later" button in the same group.
+  const confirmBtn = page.locator('button:has-text("Publish")').first();
+  await confirmBtn.waitFor({ state: 'visible', timeout: 10_000 });
+  await sleep(500 + Math.random() * 800);
+  await confirmBtn.click();
+
+  // Confirmed via a live test run: clicking confirm redirects to a
+  // transient /p/{id}/submission?redirectUrl=... page, not the public
+  // story — that redirect landing is still our success signal (it only
+  // happens after a real publish), but we then need the story's own id to
+  // build the actual canonical URL.
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+      }
+
+      if (entry) {
+        entry.attempt_started_at = new Date().toISOString();
+        save(queue);
+        try {
+          const url = await publishArticle(page, entry, log);
+          entry.published_at = new Date().toISOString();
+          entry.published_url = url;
+          delete entry.attempt_started_at;
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
+/*__MISSING__*/
